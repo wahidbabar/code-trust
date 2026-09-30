@@ -1,0 +1,18 @@
+{
+  "name": "code-trust",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Org-scale platform that measures how long AI-attributed code survives in real GitHub repository history.",
+  "packageManager": "pnpm@11.17.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "pnpm -r build",
+    "synth": "pnpm --filter infra cdk synth",
+    "deploy": "pnpm --filter infra cdk deploy"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
+  }
+}

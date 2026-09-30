@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(pnpm *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git switch *)",
+      "Bash(git restore *)",
+      "Bash(git stash *)",
+      "Bash(git fetch *)",
+      "Bash(git push -u origin *)",
+      "Bash(gh pr create *)",
+      "Bash(gh pr view *)",
+      "Bash(gh pr diff *)",
+      "Bash(gh pr checks *)",
+      "Bash(gh run list *)",
+      "Bash(gh run view *)",
+      "Bash(docker exec code-trust-pg *)"
+    ],
+    "deny": [
+      "Read(.env)",
+      "Read(.env.*)",
+      "Read(!.env.example)",
+      "Read(!.env.workspace)",
+      "Read(**/*.pem)",
+      "Read(~/.aws/**)",
+      "Bash(cdk deploy *)",
+      "Bash(cdk destroy *)",
+      "Bash(npx cdk deploy *)",
+      "Bash(npx cdk destroy *)",
+      "Bash(git push --force *)",
+      "Bash(gh pr merge *)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|Read|Edit|Write|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/guard.mjs",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/format.mjs",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/verify-on-stop.mjs",
+            "timeout": 300
+          }
+        ]
+      }
+    ]
+  }
+}

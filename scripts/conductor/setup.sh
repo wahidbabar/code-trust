@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# Conductor setup: runs once when a workspace is created. Safe to re-run.
+set -euo pipefail
+cd "${CONDUCTOR_WORKSPACE_PATH:-$(pwd)}"
+
+# Dependencies. pnpm's global store hard-links packages, so each worktree installs in seconds.
+if [ -f package.json ]; then
+  if [ -f pnpm-lock.yaml ]; then
+    pnpm install --frozen-lockfile
+  else
+    pnpm install
+  fi
+fi
+
+# A private Postgres database per workspace, inside one shared container (OrbStack or Docker).
+# Skipped with a note when Docker isn't running; nothing before T02 needs it.
+if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
+  if ! docker ps -a --format '{{.Names}}' | grep -x code-trust-pg >/dev/null; then
+    docker run -d --name code-trust-pg --restart unless-stopped \
+      -e POSTGRES_PASSWORD=postgres -p 127.0.0.1:54329:5432 postgres:17-alpine >/dev/null
+  fi
+  docker start code-trust-pg >/dev/null
+  for _ in $(seq 1 30); do
+    if docker exec code-trust-pg pg_isready -U postgres >/dev/null 2>&1; then break; fi
+    sleep 1
+  done
+  db="ct_$(printf '%s' "${CONDUCTOR_WORKSPACE_NAME:-local}" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9' '_')"
+  if ! docker exec code-trust-pg psql -U postgres -tAc "SELECT 1 FROM pg_database WHERE datname = '${db}'" | grep -x 1 >/dev/null; then
+    docker exec code-trust-pg createdb -U postgres "${db}"
+  fi
+  printf 'DATABASE_URL=postgres://postgres:postgres@127.0.0.1:54329/%s\n' "${db}" > .env.workspace
+  echo "Workspace database: ${db}"
+else
+  echo "Docker isn't running, so no workspace database was created. Start OrbStack before T02."
+fi

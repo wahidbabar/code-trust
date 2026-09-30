@@ -1,0 +1,20 @@
+"$schema" = "https://conductor.build/schemas/settings.repo.schema.json"
+
+# Gitignored files copied from the repo root into every new workspace.
+file_include_globs = """
+.env
+"""
+
+[scripts]
+setup = "bash scripts/conductor/setup.sh"
+archive = "bash scripts/conductor/archive.sh"
+run_mode = "concurrent"
+
+[scripts.run.verify]
+command = "pnpm -s verify:changed"
+default = true
+icon = "play"
+
+[scripts.run.verify-all]
+command = "pnpm -s verify"
+icon = "play"
