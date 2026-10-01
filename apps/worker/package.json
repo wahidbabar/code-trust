@@ -1,0 +1,21 @@
+{
+  "name": "@code-trust/worker",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Job runner around the analyzer: clone, analyze, write results.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check .",
+    "format": "biome format --write .",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@code-trust/analyzer": "workspace:*",
+    "@code-trust/db": "workspace:*",
+    "@code-trust/shared": "workspace:*"
+  }
+}
