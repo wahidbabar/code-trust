@@ -3,16 +3,24 @@
   "version": "0.0.0",
   "private": true,
   "description": "Org-scale platform that measures how long AI-attributed code survives in real GitHub repository history.",
+  "type": "module",
   "packageManager": "pnpm@11.17.0",
   "engines": {
-    "node": ">=22"
+    "node": ">=22.12"
   },
   "scripts": {
-    "build": "pnpm -r build",
-    "synth": "pnpm --filter infra cdk synth",
-    "deploy": "pnpm --filter infra cdk deploy"
+    "typecheck": "tsc --noEmit && pnpm -r --if-present typecheck",
+    "lint": "biome check .",
+    "format": "biome format --write .",
+    "test": "vitest run",
+    "verify": "pnpm typecheck && pnpm lint && pnpm test",
+    "verify:changed": "node scripts/verify-changed.mjs",
+    "synth": "ALERT_EMAIL_PLACEHOLDER=1 pnpm --filter @code-trust/infra exec cdk synth --no-notices"
   },
   "devDependencies": {
-    "typescript": "^5.6.3"
+    "@biomejs/biome": "2.5.15",
+    "@types/node": "^22.20.4",
+    "typescript": "7.0.2",
+    "vitest": "^5.0.3"
   }
 }
