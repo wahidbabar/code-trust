@@ -16,6 +16,20 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # For the packages/db tests only. Same major version as the workspace container in
+    # scripts/conductor/setup.sh and as the Neon project.
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v7
 
@@ -30,7 +44,10 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      # The db tests fail, not skip, when CI is set and there is no DATABASE_URL.
       - run: pnpm verify
+        env:
+          DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/postgres
 
       # Needs no AWS credentials and no ALERT_EMAIL: the script synthesizes with a placeholder address.
       - run: pnpm synth
