@@ -33,8 +33,8 @@ function main() {
   const base = git(['merge-base', 'HEAD', 'origin/main']) || git(['rev-parse', '--verify', '-q', 'HEAD']);
   if (!base) return;
 
-  const untracked = lines(git(['ls-files', '--others', '--exclude-standard']));
-  const changed = [...new Set([...lines(git(['diff', '--name-only', base])), ...untracked])];
+  const untracked = gitPaths(['ls-files', '--others', '--exclude-standard', '-z']);
+  const changed = [...new Set([...gitPaths(['diff', '--name-only', '-z', base]), ...untracked])];
 
   const touchedProtected = changed.filter((file) => PROTECTED_DATA.some((re) => re.test(file)));
   if (touchedProtected.length > 0 && !existsSync(join(root, '.context', 'allow-golden'))) {
@@ -156,8 +156,20 @@ function git(args) {
   }
 }
 
-function lines(text) {
-  return text ? text.split('\n').filter(Boolean) : [];
+// NUL-separated output, so git never quotes paths that contain spaces or non-ASCII characters.
+function gitPaths(args) {
+  try {
+    return execFileSync('git', args, {
+      cwd: root,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+      maxBuffer: 64 * 1024 * 1024,
+    })
+      .split('\0')
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
 }
 
 function tail(text, count) {

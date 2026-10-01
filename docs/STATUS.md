@@ -2,9 +2,16 @@
 
 | Task | Title | Wave | Status | Depends on | PR |
 | --- | --- | --- | --- | --- | --- |
-| T01 | Foundation: monorepo, tooling, CI, FoundationStack | 0 | in review | | [#1](https://github.com/wahidbabar/code-trust/pull/1) |
-| T02 | Contracts: shared schemas, queue messages, DB schema | 0 | planned | T01 | |
+| T01 | Foundation: monorepo, tooling, CI, FoundationStack | 0 | done | | [#1](https://github.com/wahidbabar/code-trust/pull/1) |
+| T02 | Contracts: shared schemas, queue messages, DB schema | 0 | ready | T01 | |
 | T03+ | Written by `/plan-wave 1` after T02 merges | 1 | | T02 | |
+
+## Deployed
+
+| Stack | Region | Deployed | Notes |
+| --- | --- | --- | --- |
+| CDKToolkit | ap-south-1 | 2026-10-02 | CDK bootstrap, created once by the human |
+| CodeTrustFoundation | ap-south-1 | 2026-10-02 | Budget alarm and data bucket from T01 |
 
 ## Waves
 

@@ -7,9 +7,8 @@ A GitHub App that measures how long AI-attributed code survives in real reposito
 - `pnpm install`: pnpm workspaces only, never npm or yarn.
 - `pnpm verify:changed`: typecheck, lint and tests for packages changed since `origin/main` and their dependents. Run it before you say you're done.
 - `pnpm verify`: every package. CI runs this.
-- `pnpm --filter <package> test -- <pattern>`: one package or one test while iterating.
+- `pnpm --filter @code-trust/<package> test <pattern>`: one package, or the test files matching a pattern, while iterating.
 - `pnpm synth`: proves infra compiles. Synth is fine; deploying is not.
-- Task T01 creates these scripts. Until it merges, only `pnpm install` exists.
 
 ## Environment
 

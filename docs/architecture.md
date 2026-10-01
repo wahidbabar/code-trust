@@ -76,6 +76,7 @@ Nothing may cost money while idle, and normal use stays inside AWS credits and a
 - Every Lambda function and Fargate task is arm64.
 - Every log group has a retention period: 14 days unless a task says otherwise.
 - S3 objects under `raw/` expire after 14 days, and incomplete multipart uploads abort after 7 days.
+- Every S3 prefix that code writes to has a lifecycle rule, or a row in Decisions saying why its data is kept.
 - DynamoDB stays inside the always-free tier (provisioned capacity at or under 25 RCU and 25 WCU) unless a decision below says otherwise.
 - Container images, if any: a lifecycle policy keeps at most 2 per repository.
 - An AWS Budgets alarm always exists: 5 USD a month, email at 50, 80 and 100 percent of actual spend, counted before credits.

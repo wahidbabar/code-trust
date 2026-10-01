@@ -68,14 +68,16 @@ Run these on the Mac, in Terminal.
 After a PR that touches `infra/` merges, from `~/grind/code-trust` on main:
 
 ```bash
+cd ~/grind/code-trust
 git pull && pnpm install
-pnpm synth
-# first time only, per account and region:
-pnpm --filter infra exec cdk bootstrap
-ALERT_EMAIL=you@example.com pnpm --filter infra exec cdk deploy FoundationStack
+aws login                                   # temporary session, up to 12 hours
+export ALERT_EMAIL=you@example.com          # budget alert inbox, never committed
+cd infra
+pnpm exec cdk deploy CodeTrustFoundation    # or the stack the PR added
+aws logout                                  # agents never find a live AWS session
 ```
 
-T01 writes the exact commands into the README. Agents can't run these; the guard hook blocks them.
+`cdk bootstrap` is a one-time step per account and region, already done for `ap-south-1` on 2026-10-02. The README's Deploy section has the same commands. Agents can't run any of these; the guard hook blocks them. Record each deploy in the Deployed table in docs/STATUS.md.
 
 ## Loops: which tool for which job
 

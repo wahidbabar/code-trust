@@ -1,6 +1,6 @@
 # T02: Contracts (shared schemas, queue messages, database schema, metric definitions)
 
-Status: planned (starts when T01 merges)
+Status: ready
 Wave: 0 (serial)
 Depends on: T01
 Owner paths (edit only these):
@@ -25,7 +25,7 @@ Define the contracts every later lane builds against, so parallel lanes never in
 ## Done when
 
 - [ ] Every schema has round-trip tests: valid fixtures parse, invalid ones fail with useful errors.
-- [ ] `pnpm --filter db migrate` applies cleanly to the workspace database (its URL is in `.env.workspace`), and running it a second time changes nothing.
+- [ ] `pnpm --filter @code-trust/db migrate` applies cleanly to the workspace database (its URL is in `.env.workspace`), and running it a second time changes nothing.
 - [ ] A test proves the database row types and the shared zod types agree for survival data.
 - [ ] CI runs the db tests against a Postgres service container.
 - [ ] The Metric definitions section of docs/architecture.md states exactly how survival is computed, including censoring, and names the first attribution signals.
@@ -47,5 +47,5 @@ Define the contracts every later lane builds against, so parallel lanes never in
 Paste into the workspace after approving the plan:
 
 ```
-/goal all shared and db schema tests pass, pnpm --filter db migrate succeeds twice in a row against the workspace database, the Metric definitions section in docs/architecture.md is complete, and pnpm verify:changed exits 0; show each command and its output; only the owner paths changed; or stop after 20 turns
+/goal all shared and db schema tests pass, pnpm --filter @code-trust/db migrate succeeds twice in a row against the workspace database, the Metric definitions section in docs/architecture.md is complete, and pnpm verify:changed exits 0; show each command and its output; nothing changed outside the owner paths except this task's Status line and its row in docs/STATUS.md; or stop after 20 turns
 ```

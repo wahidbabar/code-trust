@@ -1,6 +1,6 @@
 # T01: Foundation (monorepo, tooling, CI, FoundationStack)
 
-Status: in review
+Status: done
 Wave: 0 (serial)
 Depends on: nothing
 Owner paths (edit only these): everything except `.claude/`, `.conductor/`, `scripts/conductor/` and other tasks' files
