@@ -193,6 +193,15 @@ export const youngSurvivalMetricFixture: SurvivalMetric = {
   survival180d: null,
 };
 
+export const youngSurvivalCurveFixture: SurvivalCurve = {
+  cohort: 'human',
+  points: [
+    { day: 0, survival: 1, atRisk: 40 },
+    { day: 13, survival: 0.9, atRisk: 36 },
+    { day: 60, survival: 0.9, atRisk: 10 },
+  ],
+};
+
 export const pushEventFixture: RepoEventMessage = {
   version: 1,
   type: 'push',

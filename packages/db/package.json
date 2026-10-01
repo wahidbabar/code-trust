@@ -5,13 +5,16 @@
   "description": "Postgres schema, migrations and typed queries.",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./pg": "./src/pg.ts",
+    "./testing": "./src/testing.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",
     "format": "biome format --write .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "migrate": "node --experimental-strip-types --env-file-if-exists=../../.env.workspace src/migrate.ts"
   },
   "dependencies": {
     "@code-trust/shared": "workspace:*",

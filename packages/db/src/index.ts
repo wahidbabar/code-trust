@@ -1,2 +1,6 @@
-// Placeholder so the workspace wiring can be verified. The owning lane replaces it.
-export const PACKAGE_NAME = '@code-trust/db';
+// Driver-free on purpose: importing this pulls in no database driver. Pick one from a subpath,
+// such as '@code-trust/db/pg'.
+export type * from './database.ts';
+export * from './migrator.ts';
+export * from './queries.ts';
+export * from './rows.ts';
