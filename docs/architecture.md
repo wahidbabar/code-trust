@@ -6,7 +6,7 @@ Why survival: the usual AI coding metric is acceptance, meaning whether someone 
 
 ## Stack
 
-- TypeScript everywhere, ESM, strict.
+- TypeScript 7 everywhere, ESM, strict.
 - pnpm workspaces monorepo.
 - AWS CDK v2 (`aws-cdk-lib`) for all infrastructure, in TypeScript.
 - Region `ap-south-1`. All compute is arm64 (Lambda `arm64`, Fargate `ARM64`).
@@ -78,7 +78,7 @@ Nothing may cost money while idle, and normal use stays inside AWS credits and a
 - S3 objects under `raw/` expire after 14 days, and incomplete multipart uploads abort after 7 days.
 - DynamoDB stays inside the always-free tier (provisioned capacity at or under 25 RCU and 25 WCU) unless a decision below says otherwise.
 - Container images, if any: a lifecycle policy keeps at most 2 per repository.
-- An AWS Budgets alarm always exists: 5 USD a month, email at 50, 80 and 100 percent of actual spend.
+- An AWS Budgets alarm always exists: 5 USD a month, email at 50, 80 and 100 percent of actual spend, counted before credits.
 - The repo is public: no account IDs, emails or ARNs in code. Read them from the environment at synth time.
 
 ## Metric definitions (finalized in T02)
@@ -102,6 +102,14 @@ This repo dogfoods the metric: its commits carry Claude Code's default trailer, 
 | 2026-09 | Built by Claude Code agents in Conductor with a hook-enforced harness | See docs/PLAYBOOK.md |
 | 2026-09 | Secrets in SSM Parameter Store, not Secrets Manager | Free |
 | 2026-09 | Vitest and Biome as defaults | One fast test runner and one lint/format tool for every package |
+| 2026-10 | TypeScript 7.0.2 (native compiler), pinned exact | T01 checked NestJS decorators first: a class using `@Injectable()`, constructor injection, `@Inject` and `@Optional` compiles to byte-identical JavaScript under 6.0.3 and 7.0.2 with `experimentalDecorators` and `emitDecoratorMetadata`, and `design:paramtypes` reads back correctly at runtime. Vitest 5 (Vite 8, Rolldown) emits the same metadata, so API tests need no extra transform. Two things for the API lane: `@nestjs/cli` 12 still bundles TypeScript 6 for `nest build`, and esbuild does not emit decorator metadata, so the Lambda bundle must come from `tsc` or another metadata-aware compiler. The decorator flags go in `apps/api/tsconfig.json`, not the base config |
+| 2026-10 | Workspace packages export TypeScript source (`exports` points at `src/index.ts`), relative imports use `.ts` extensions | Typecheck and tests need no build step or build order, and files run under Node's type stripping as written |
+| 2026-10 | `verify:changed` builds its own changed-package list from `git diff` plus untracked files | pnpm's `...[ref]` filter reads `git diff` only, so a new untracked file would skip verification |
+| 2026-10 | `ALERT_EMAIL` is required for every CDK run; only the root `synth` script may use a placeholder, behind `ALERT_EMAIL_PLACEHOLDER=1` | `pnpm synth` must work with no setup for CI and the cost-guard agent, and a deploy must never ship a budget alarm that emails nobody |
+| 2026-10 | The budget counts spend before credits and refunds | With the AWS default, credits net usage to zero, so the alarm would stay silent while a runaway resource burned through them |
+| 2026-10 | `cdk.json` carries the CDK library's recommended feature flags, and stack tests load the same context | A new app should start on current defaults, since flipping flags after the first deploy can change deployed resources. Tests then assert on what `pnpm synth` produces |
+| 2026-10 | No dependency install scripts: `allowBuilds` in `pnpm-workspace.yaml` turns esbuild's off | pnpm 11 fails the install on an unreviewed build script. esbuild's binary arrives as an optional dependency, so its postinstall is not needed |
+| 2026-10 | Biome skips the harness (`.claude/`, `.conductor/`, `scripts/conductor/`) | Lanes can't edit those files, so a formatting difference there would block every lane's verify |
 
 ## Open decisions
 
@@ -111,7 +119,6 @@ This repo dogfoods the metric: its commits carry Claude Code's default trailer, 
 | Worker runtime | Fargate `RunTask` (current plan; no free tier, cents per job) or Lambda (always-free compute, 15 minute and 10 GB limits) | Worker lane, with real repo sizes |
 | Query layer | Drizzle or Kysely, with Neon's serverless driver | T02 |
 | Dashboard hosting | S3 plus CloudFront, or a free static host | Dashboard lane |
-| TypeScript version | TypeScript 7 (native compiler, much faster typecheck for the loops) if NestJS decorators work with it, otherwise the newest version that does | T01 |
 
 ## Build order
 
