@@ -31,11 +31,12 @@ if (git(['rev-parse', '--verify', '--quiet', `${base}^{commit}`]) === null) {
 }
 
 // --no-renames reports both sides of a move, so the package a file left is checked too.
-const tracked = git(['diff', '--name-only', '--no-renames', base]);
-const untracked = git(['ls-files', '--others', '--exclude-standard']);
+// -z keeps paths raw: without it git quotes and escapes non-ASCII names, which then match no package.
+const tracked = git(['diff', '--name-only', '--no-renames', '-z', base]);
+const untracked = git(['ls-files', '--others', '--exclude-standard', '-z']);
 if (tracked === null || untracked === null) fullVerify('git could not list the changed files');
 
-const changed = [...new Set([...lines(tracked), ...lines(untracked)])];
+const changed = [...new Set([...paths(tracked), ...paths(untracked)])];
 if (changed.length === 0) {
   log(`nothing changed since ${base}.`);
   process.exit(0);
@@ -110,8 +111,8 @@ function git(args) {
   return result.status === 0 ? result.stdout : null;
 }
 
-function lines(text) {
-  return text.split('\n').filter(Boolean);
+function paths(nulSeparated) {
+  return nulSeparated.split('\0').filter(Boolean);
 }
 
 function log(message) {
