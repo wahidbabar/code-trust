@@ -14,6 +14,11 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@code-trust/shared": "workspace:*"
+    "@code-trust/shared": "workspace:*",
+    "kysely": "^0.29.6",
+    "pg": "^8.23.1"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.23.1"
   }
 }
