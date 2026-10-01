@@ -82,13 +82,70 @@ Nothing may cost money while idle, and normal use stays inside AWS credits and a
 - An AWS Budgets alarm always exists: 5 USD a month, email at 50, 80 and 100 percent of actual spend, counted before credits.
 - The repo is public: no account IDs, emails or ARNs in code. Read them from the environment at synth time.
 
-## Metric definitions (finalized in T02)
+## Metric definitions
 
-- AI-attributed line: a line whose introducing commit carries an AI attribution signal. First signal: `Co-Authored-By` trailers that name an AI tool, such as `Co-Authored-By: Claude <noreply@anthropic.com>`. Signals to evaluate next: bot authors, PR labels, commit message markers.
-- Survival at t: the share of AI-attributed lines still present (by blame) t days after they were introduced.
-- Lines still alive at the last observation are right-censored rather than counted as survivors forever. A Kaplan-Meier estimator handles that, and it makes repos of different ages comparable.
-- Human-written lines get the same metrics as the baseline.
-- The attribution eval gate (hardening) scores attribution against a labeled set of commits. A held-out slice in `eval/holdout/` is never shown to agents.
+Finalized in T02 and encoded in `packages/shared/src/domain.ts`. Change the two together.
+
+### What is measured
+
+- **Mainline.** The default branch's first-parent chain, up to the analyzed head. Only lines that land on the mainline are measured. A line added and removed inside a branch before it merges never counts. That makes squash, rebase and merge-commit repos comparable, and it leaves out the time before a merge, during which a line could not have been seen to die.
+- **Line.** A non-blank line of a text file. A line keeps its identity through file renames and whitespace-only edits. Any other edit, or a move, ends it and starts a new line that belongs to the editing commit.
+- **Introducing commit.** The commit `git blame` assigns the line to at the mainline commit where it landed. For a direct push, a squash merge or a rebase merge that is the landing commit itself. For a merge commit it is the branch commit that wrote the line. Attribution is read from the introducing commit.
+
+### Lifetime and censoring
+
+- The clock starts at the committer date of the mainline commit that landed the line (`introducedAt`).
+- It stops at the committer date of the mainline commit whose diff against its first parent removes the line (`removedBy`, `removedAt`).
+- A line still present at the analyzed head is right-censored at `observedAt`, the time the worker fetched that head. It counts as at risk up to then and never as a removal, so it is not counted as a survivor forever either.
+- Lifetime in whole days: `T = floor((end - introducedAt) / 86400 seconds)`, where `end` is `removedAt`, or `observedAt` for a censored line. A negative value (clock skew) counts as 0.
+
+### Survival
+
+A Kaplan-Meier estimator on whole days, computed per cohort. It is what makes repos of different ages comparable.
+
+- `n_k`: lines with `T >= k`, the lines at risk on day `k`. A line censored at `T = k` is still at risk on day `k`.
+- `d_k`: removed lines with `T = k`.
+- `S(0) = 1` and `S(k) = (1 - d_0/n_0) * (1 - d_1/n_1) * ... * (1 - d_(k-1)/n_(k-1))`.
+- **Survival at `k` days is `S(k)`**: the estimated share of lines that last at least `k` full days. The headline numbers are `S(30)`, `S(90)` and `S(180)`.
+- `S(k)` is reported only while `n_k > 0`. Past the longest observed lifetime it is null, never extrapolated. Every curve point carries `atRisk` (`n_k`) so a thin tail can be shown as thin.
+
+Worked example, 10 lines in one cohort:
+
+| Lines | Fate | `T` |
+| --- | --- | --- |
+| 2 | removed | 10 |
+| 3 | censored | 45 |
+| 1 | removed | 60 |
+| 4 | censored | 200 |
+
+`n_10 = 10` and `d_10 = 2`, so `S(30) = 0.8`. `n_60 = 5` and `d_60 = 1`, so `S(90) = S(180) = 0.8 * 0.8 = 0.64`. `n_365 = 0`, so `S(365)` is null. Counting "alive out of all lines" at 90 days would give 0.40, because it treats the three lines that were only 45 days old as dead. The same numbers are a fixture in `packages/shared/src/fixtures.ts`.
+
+### Cohorts
+
+Every commit gets one cohort, and a line takes the cohort of its introducing commit.
+
+- `ai`: the commit has at least one attribution with confidence at or above 0.5 (`AI_CONFIDENCE_THRESHOLD`).
+- `automation`: the author is a GitHub App bot account (`name[bot]`) that is not a known AI agent, such as dependabot or renovate. These lines are in neither curve, so dependency bumps don't drag the baseline down. A removal made by an automation commit still ends the lines it removes.
+- `human`: everything else. Human lines get the same estimator and are the baseline.
+
+### Attribution signals
+
+The first signals are both read from git alone, and both are exact matches against a list of known AI identities, emitted with confidence 1:
+
+1. `co_author_trailer`: a `Co-Authored-By` trailer whose name or email is a known AI tool, such as `Co-Authored-By: Claude <noreply@anthropic.com>`.
+2. `author_identity`: the commit's author or committer is a known AI agent account, such as `copilot-swe-agent[bot]`. Agent commits often carry no AI trailer, and without this signal they would land in the human baseline.
+
+Not counted yet: commit message markers and PR labels. They are heuristics (and PR labels need the GitHub API), so they wait for the eval gate. Confidence below 1 is reserved for them.
+
+The list of AI identities belongs to the analyzer. The attribution eval gate (hardening) scores attribution against a labeled set of commits. A held-out slice in `eval/holdout/` is never shown to agents.
+
+Attribution evidence holds only the matched AI identity or AI trailer. No table stores a human name or email.
+
+### Limits
+
+- Survival means unchanged, not correct. Code in an abandoned repo survives by default, so the dashboard must show the last activity (`headCommittedAt`) next to every curve.
+- Attribution is per commit. A commit with an AI trailer counts all of its lines as AI, including the ones a person typed.
+- Lines in one commit tend to die together, so they are not independent samples. No confidence interval is reported yet.
 
 This repo dogfoods the metric: its commits carry Claude Code's default trailer, so its own history is the first test dataset.
 
