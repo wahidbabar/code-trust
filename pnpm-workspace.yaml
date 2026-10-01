@@ -2,3 +2,9 @@ packages:
   - 'infra'
   - 'apps/*'
   - 'packages/*'
+
+# pnpm 11 fails the install on any dependency build script nobody has ruled on.
+# esbuild's postinstall only double-checks its binary, which arrives as an optional
+# dependency anyway, so it stays off: no install script runs in this repo.
+allowBuilds:
+  esbuild: false
