@@ -2,7 +2,7 @@
 
 | Task | Title | Wave | Status | Depends on | PR |
 | --- | --- | --- | --- | --- | --- |
-| T01 | Foundation: monorepo, tooling, CI, FoundationStack | 0 | ready | | |
+| T01 | Foundation: monorepo, tooling, CI, FoundationStack | 0 | in progress | | |
 | T02 | Contracts: shared schemas, queue messages, DB schema | 0 | planned | T01 | |
 | T03+ | Written by `/plan-wave 1` after T02 merges | 1 | | T02 | |
 
