@@ -22,11 +22,28 @@ const COMMAND_RULES = [
     'Mutating AWS CLI calls are human-only. Read-only describe, get and list calls are fine.',
   ],
   [/\baws\s+s3\s+(cp|mv|rm|sync|mb|rb)\b/, 'Writing to S3 is human-only.'],
-  [/\bgit\s+push\b.*(\s--force(-with-lease)?(\s|=|$)|\s-[a-zA-Z]*f[a-zA-Z]*(\s|$)|\s\+\S)/, 'Force pushes are not allowed.'],
-  [/\bgit\s+push\b.*[\s:](main|master)(\s|$)/, 'Never push to main. Push your branch and open a PR.'],
   [/\bgh\s+pr\s+merge\b/, "Merging is the human's call."],
   [/\bgh\s+(repo\s+(delete|edit|rename|archive)|secret\s+(set|delete|remove))\b/, 'Repository settings and secrets are human-only.'],
   [/\.context\/allow-/, 'Only the human creates .context/allow-* override files.'],
+];
+
+// `git push`, also with global options before it (`git -C dir push`, `git -c key=value push`).
+// Group 1 is everything after `push` within that one command.
+const GIT_PUSH = /\bgit(?:\s+(?:-[cC]\s+\S+|--[\w-]+(?:=\S+)?))*\s+push\b(.*)/;
+
+// Checked against the arguments of one `git push`. `--force-with-lease` (with `--force-if-includes`)
+// stays allowed on purpose: after a rebase it is how a lane updates its own branch, and it refuses
+// to overwrite commits this clone has not seen. The main-branch rules below still apply to it.
+const PUSH_RULES = [
+  [
+    /\s--force(?![\w-])|\s-[a-zA-Z]*f[a-zA-Z]*(?![\w-])|\s\+\S/,
+    'Plain force pushes are not allowed. After a rebase, push with `git push --force-with-lease --force-if-includes origin HEAD`.',
+  ],
+  [
+    /\s--(mirror|all|delete|prune)(?![\w-])|\s-[a-zA-Z]*d[a-zA-Z]*(?![\w-])|\s:\S/,
+    'Push only your own branch. Deleting or mirroring remote branches is human-only.',
+  ],
+  [/[\s:](refs\/heads\/)?(main|master)(?![\w./-])/, 'Never push to main. Push your branch and open a PR.'],
 ];
 
 try {
@@ -41,16 +58,28 @@ try {
 process.exit(0);
 
 function checkCommand(raw) {
-  const cmd = raw.replace(/\s+/g, ' ').replace(/\s--(profile|region|output|endpoint-url)(=|\s)\S+/g, '');
+  const cmd = normalize(raw);
   for (const [pattern, why] of COMMAND_RULES) {
     if (pattern.test(cmd)) block(why);
   }
-  if (/\bgit\s+push\b/.test(cmd) && ['main', 'master'].includes(currentBranch())) {
-    block('You are on main. Create a branch for your work; never push main.');
+  // One command at a time, so a flag of a later command (`&& gh pr create -f`) is never read as a push flag.
+  for (const part of raw.split(/\n|&&|\|\||[;&|]/)) {
+    const push = GIT_PUSH.exec(normalize(part));
+    if (!push) continue;
+    for (const [pattern, why] of PUSH_RULES) {
+      if (pattern.test(push[1])) block(why);
+    }
+    if (['main', 'master'].includes(currentBranch())) {
+      block('You are on main. Create a branch for your work; never push main.');
+    }
   }
   for (const token of cmd.split(/[\s'"`=<>|;&()]+/)) {
     if (token && !token.startsWith('-') && isSecretPath(token)) block(`The command touches a secret file (${token}).`);
   }
+}
+
+function normalize(command) {
+  return command.replace(/\s+/g, ' ').replace(/\s--(profile|region|output|endpoint-url)(=|\s)\S+/g, '');
 }
 
 function checkRead(path) {
