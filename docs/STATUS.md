@@ -3,8 +3,8 @@
 | Task | Title | Wave | Status | Depends on | PR |
 | --- | --- | --- | --- | --- | --- |
 | T01 | Foundation: monorepo, tooling, CI, FoundationStack | 0 | done | | [#1](https://github.com/wahidbabar/code-trust/pull/1) |
-| T02 | Contracts: shared schemas, queue messages, DB schema | 0 | in review | T01 | [#2](https://github.com/wahidbabar/code-trust/pull/2) |
-| T03+ | Written by `/plan-wave 1` after T02 merges | 1 | | T02 | |
+| T02 | Contracts: shared schemas, queue messages, DB schema | 0 | done | T01 | [#2](https://github.com/wahidbabar/code-trust/pull/2) |
+| T03+ | Written by `/plan-wave 1` | 1 | next | T02 | |
 
 ## Deployed
 

@@ -102,5 +102,6 @@ aws logout                                  # agents never find a live AWS sessi
 
 - **A hook blocked something legitimate.** Read the message. For an intended change to goldens or to the harness, create `.context/allow-golden` or `.context/allow-harness` in that workspace yourself. Agents can't create these files.
 - **The Stop hook handed back after 3 retries.** The agent is stuck. Read the failure, sharpen the task, or take over.
-- **Setup script failed.** Conductor shows the log. Usually OrbStack isn't running or `pnpm install` failed.
+- **Setup script failed.** Conductor shows the log. Usually OrbStack isn't running or `pnpm install` failed. Start OrbStack and run `bash scripts/conductor/setup.sh` in the workspace's terminal.
+- **Postgres still running after archiving.** Expected: `code-trust-pg` is shared by every workspace, and archiving only drops that workspace's database. Stop it when you're not working with the stop button in OrbStack or `docker stop code-trust-pg`; the next workspace setup starts it again. Don't delete the container unless you mean to wipe every local database.
 - **Usage limit hit.** Wait for the reset. The task file and the branch hold the state, so a fresh session can pick up where the last one stopped.

@@ -1,6 +1,6 @@
 # T02: Contracts (shared schemas, queue messages, database schema, metric definitions)
 
-Status: in review
+Status: done
 Wave: 0 (serial)
 Depends on: T01
 Owner paths (edit only these):
