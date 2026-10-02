@@ -11,6 +11,8 @@ import {
 } from '@code-trust/shared';
 import {
   REPO_ID,
+  revertedSurvivalCurveFixture,
+  revertedSurvivalMetricFixture,
   SHA,
   survivalCurveFixture,
   survivalMetricFixture,
@@ -169,6 +171,17 @@ describe.skipIf(testDatabaseUrl === null)('survival data round-trips through Pos
     await upsertSurvivalRollup(scratch.db, { metric: next, points: [{ day: 0, survival: 1, atRisk: 12 }] });
     expect(await listSurvivalMetrics(scratch.db, REPO_ID)).toEqual([next, youngSurvivalMetricFixture]);
     expect((await getSurvivalCurves(scratch.db, REPO_ID))[0]?.points).toEqual([{ day: 0, survival: 1, atRisk: 12 }]);
+  });
+
+  test('survival 0 (all removed) and null (not observed yet) stay different through Postgres', async () => {
+    await upsertSurvivalRollup(scratch.db, {
+      metric: revertedSurvivalMetricFixture,
+      points: revertedSurvivalCurveFixture.points,
+    });
+    const [ai, human] = await listSurvivalMetrics(scratch.db, REPO_ID);
+    expect(ai).toEqual(revertedSurvivalMetricFixture);
+    expect([ai?.survival90d, human?.survival90d]).toEqual([0, null]);
+    expect((await getSurvivalCurves(scratch.db, REPO_ID))[0]).toEqual(revertedSurvivalCurveFixture);
   });
 
   test('a curve that is not a valid step function is refused on the way in', async () => {

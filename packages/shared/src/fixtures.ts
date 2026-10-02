@@ -202,6 +202,43 @@ export const youngSurvivalCurveFixture: SurvivalCurve = {
   ],
 };
 
+/**
+ * The second example from the doc, a reverted change: 10 AI lines, all removed 5 days after they
+ * landed. Survival is 0 from day 6 on, which is a known result and not a missing one. It stands
+ * alone: its commits are not in commitFixtures.
+ */
+export const revertedObservationFixtures: SurvivalObservation[] = [
+  {
+    repoId: REPO_ID,
+    introducedBy: sha('1'),
+    removedBy: sha('2'),
+    lineCount: 10,
+    introducedAt: daysBefore(OBSERVED_AT, 100),
+    removedAt: daysBefore(OBSERVED_AT, 94.5),
+  },
+];
+
+export const revertedSurvivalMetricFixture: SurvivalMetric = {
+  repoId: REPO_ID,
+  cohort: 'ai',
+  headSha: SHA.head,
+  observedAt: OBSERVED_AT,
+  linesTotal: 10,
+  linesRemoved: 10,
+  linesCensored: 0,
+  survival30d: 0,
+  survival90d: 0,
+  survival180d: 0,
+};
+
+export const revertedSurvivalCurveFixture: SurvivalCurve = {
+  cohort: 'ai',
+  points: [
+    { day: 0, survival: 1, atRisk: 10 },
+    { day: 6, survival: 0, atRisk: 0 },
+  ],
+};
+
 export const pushEventFixture: RepoEventMessage = {
   version: 1,
   type: 'push',

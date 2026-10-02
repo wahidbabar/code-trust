@@ -16,6 +16,9 @@ import {
   newRepoFixture,
   OBSERVED_AT,
   repoFixture,
+  revertedObservationFixtures,
+  revertedSurvivalCurveFixture,
+  revertedSurvivalMetricFixture,
   SHA,
   survivalCurveFixture,
   survivalMetricFixture,
@@ -239,7 +242,7 @@ const cases: Record<string, SchemaCases> = {
     ],
   },
   SurvivalCurvePointSchema: {
-    valid: points,
+    valid: [...points, { day: 6, survival: 0, atRisk: 0 }],
     invalid: [
       {
         why: 'survival above 1',
@@ -249,16 +252,28 @@ const cases: Record<string, SchemaCases> = {
       },
       { why: 'a negative day', value: { day: -1, survival: 1, atRisk: 4 }, path: ['day'], message: />=0/ },
       {
-        why: 'a point with nothing at risk',
+        why: 'a point with nothing at risk while survival is above 0',
         value: { day: 300, survival: 0.64, atRisk: 0 },
         path: ['atRisk'],
-        message: />=1/,
+        message: /atRisk is 0 exactly when survival is 0/,
+      },
+      {
+        why: 'zero survival with lines still at risk',
+        value: { day: 6, survival: 0, atRisk: 4 },
+        path: ['atRisk'],
+        message: /atRisk is 0 exactly when survival is 0/,
       },
     ],
   },
   SurvivalCurvePointsSchema: {
-    valid: [points, [{ day: 0, survival: 1, atRisk: 1 }]],
+    valid: [points, [{ day: 0, survival: 1, atRisk: 1 }], revertedSurvivalCurveFixture.points],
     invalid: [
+      {
+        why: 'points after survival has reached 0',
+        value: [...revertedSurvivalCurveFixture.points, { day: 9, survival: 0, atRisk: 0 }],
+        path: [],
+        message: /reaches 0 to be the last one/,
+      },
       { why: 'an empty curve', value: [], path: [], message: /day 0 point/ },
       { why: 'a curve that starts after day 0', value: points.slice(1), path: [], message: /first point at day 0/ },
       {
@@ -271,7 +286,7 @@ const cases: Record<string, SchemaCases> = {
     ],
   },
   SurvivalCurveSchema: {
-    valid: [survivalCurveFixture],
+    valid: [survivalCurveFixture, revertedSurvivalCurveFixture],
     invalid: [
       {
         why: 'a curve for the automation cohort',
@@ -288,7 +303,7 @@ const cases: Record<string, SchemaCases> = {
     ],
   },
   SurvivalMetricSchema: {
-    valid: [survivalMetricFixture, youngSurvivalMetricFixture],
+    valid: [survivalMetricFixture, youngSurvivalMetricFixture, revertedSurvivalMetricFixture],
     invalid: [
       {
         why: 'line counts that do not add up',
@@ -365,17 +380,22 @@ describe('worked example from docs/architecture.md', () => {
 
   // The estimator exactly as the doc states it. The analyzer owns the real one; this only checks
   // that the fixtures and the documented numbers agree with the definition.
-  const survivalAt = (k: number): number | null => {
-    const lines = survivalObservationFixtures.map((o) => ({ t: wholeDays(o), n: o.lineCount, removed: o.removedBy }));
-    const atRisk = (day: number) => lines.filter((l) => l.t >= day).reduce((sum, l) => sum + l.n, 0);
-    if (atRisk(k) === 0) return null;
-    let survival = 1;
-    for (let day = 0; day < k; day++) {
-      const removed = lines.filter((l) => l.removed !== null && l.t === day).reduce((sum, l) => sum + l.n, 0);
-      survival *= 1 - removed / atRisk(day);
-    }
-    return survival;
-  };
+  const estimator =
+    (observations: SurvivalObservation[]) =>
+    (k: number): number | null => {
+      const lines = observations.map((o) => ({ t: wholeDays(o), n: o.lineCount, removed: o.removedBy !== null }));
+      const atRisk = (day: number) => lines.filter((l) => l.t >= day).reduce((sum, l) => sum + l.n, 0);
+      let survival = 1;
+      for (let day = 0; day < k && atRisk(day) > 0; day++) {
+        const removed = lines.filter((l) => l.removed && l.t === day).reduce((sum, l) => sum + l.n, 0);
+        survival *= 1 - removed / atRisk(day);
+      }
+      // Nothing at risk on day k: 0 if every line was removed, otherwise unknown.
+      if (atRisk(k) === 0) return survival === 0 ? 0 : null;
+      return survival;
+    };
+
+  const survivalAt = estimator(survivalObservationFixtures);
 
   test('the fixtures have the lifetimes the doc lists', () => {
     expect(survivalObservationFixtures.map((o) => [o.lineCount, wholeDays(o), o.removedBy !== null])).toEqual([
@@ -401,6 +421,16 @@ describe('worked example from docs/architecture.md', () => {
     }
     // One day past the last point nothing is at risk.
     expect(survivalAt((survivalCurveFixture.points.at(-1)?.day ?? 0) + 1)).toBeNull();
+  });
+
+  test('a reverted change has survival 0, not unknown', () => {
+    const reverted = estimator(revertedObservationFixtures);
+    expect(revertedObservationFixtures.map(wholeDays)).toEqual([5]);
+    expect(reverted(5)).toBe(1);
+    expect(reverted(6)).toBe(0);
+    for (const horizon of SURVIVAL_HORIZON_DAYS) expect(reverted(horizon)).toBe(0);
+    expect(revertedSurvivalMetricFixture).toMatchObject({ survival30d: 0, survival90d: 0, survival180d: 0 });
+    for (const point of revertedSurvivalCurveFixture.points) expect(reverted(point.day)).toBe(point.survival);
   });
 
   test('explicit signals sit above the AI threshold', () => {
