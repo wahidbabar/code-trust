@@ -107,7 +107,8 @@ A Kaplan-Meier estimator on whole days, computed per cohort. It is what makes re
 - `d_k`: removed lines with `T = k`.
 - `S(0) = 1` and `S(k) = (1 - d_0/n_0) * (1 - d_1/n_1) * ... * (1 - d_(k-1)/n_(k-1))`.
 - **Survival at `k` days is `S(k)`**: the estimated share of lines that last at least `k` full days. The headline numbers are `S(30)`, `S(90)` and `S(180)`.
-- `S(k)` is reported only while `n_k > 0`. Past the longest observed lifetime it is null, never extrapolated. Every curve point carries `atRisk` (`n_k`) so a thin tail can be shown as thin.
+- Where the estimate ends: while `n_k > 0`, `S(k)` is the product above. Once `n_k = 0` there are two cases. If the product has reached 0, every line at risk was removed, and `S` stays 0. Otherwise the longest-lived lines are still alive (censored), and `S(k)` is null: unknown, never extrapolated. So 0 means "all removed" and null means "not observed that long yet", and the two are never confused.
+- Every curve point carries `atRisk` (`n_k`) so a thin tail can be shown as thin.
 
 Worked example, 10 lines in one cohort:
 
@@ -119,6 +120,8 @@ Worked example, 10 lines in one cohort:
 | 4 | censored | 200 |
 
 `n_10 = 10` and `d_10 = 2`, so `S(30) = 0.8`. `n_60 = 5` and `d_60 = 1`, so `S(90) = S(180) = 0.8 * 0.8 = 0.64`. `n_365 = 0`, so `S(365)` is null. Counting "alive out of all lines" at 90 days would give 0.40, because it treats the three lines that were only 45 days old as dead. The same numbers are a fixture in `packages/shared/src/fixtures.ts`.
+
+A second example, a reverted change: 10 lines, all removed at `T = 5`. `n_5 = 10` and `d_5 = 10`, so `S(6) = 0`, and `S(30)`, `S(90)` and `S(180)` are all 0, not null.
 
 ### Cohorts
 
@@ -169,7 +172,7 @@ This repo dogfoods the metric: its commits carry Claude Code's default trailer, 
 | 2026-10 | No dependency install scripts: `allowBuilds` in `pnpm-workspace.yaml` turns esbuild's off | pnpm 11 fails the install on an unreviewed build script. esbuild's binary arrives as an optional dependency, so its postinstall is not needed |
 | 2026-10 | Biome skips the harness (`.claude/`, `.conductor/`, `scripts/conductor/`) | Lanes can't edit those files, so a formatting difference there would block every lane's verify |
 | 2026-10 | Query layer: Kysely. T02 ships the node-postgres dialect only (local, CI, migrate); the first lane that runs on Lambda adds Neon's serverless driver as a second dialect | One `Kysely<Database>` type covers every driver, so the query module is written once, where Drizzle types the database object per driver. Zod stays the only model of the shapes: Drizzle's schema-as-code would be a second one, and `drizzle-zod` derives zod from tables, the wrong direction. Kysely has no dependencies, no CLI and no codegen. The cost is a hand-written `Database` interface that can drift from the SQL; tests against real Postgres compare it with the live catalog and with the zod types. Neon code waits because nothing can test it until a Neon project exists |
-| 2026-10 | Every write in the query module is one idempotent statement: an upsert that carries absolute values, or a keyed delete. Workers write repo, commits, attributions and observations, rollups, then the repo's head last | Neon's HTTP driver has no interactive transactions. A job that dies midway leaves the old head, and a retry converges, so none are needed |
+| 2026-10 | Every write in the query module is one idempotent statement: an upsert that carries absolute values, or a keyed delete. Workers write repo, commits, attributions and observations, rollups, then the repo's head last, and only that last write (`setRepoHead`) moves the head | Neon's HTTP driver has no interactive transactions. A job that dies midway leaves the old head, and a retry converges, so none are needed |
 | 2026-10 | Postgres 17 everywhere: the workspace container, the CI service, and the Neon project when it is created | One major version to reason about. The schema needs 15 or newer for `UNIQUE NULLS NOT DISTINCT` |
 | 2026-10 | Migrations are forward-only `.sql` files applied by Kysely's Migrator. `migrate` runs under Node's type stripping with no loader, and reads `DATABASE_URL` from the environment or the workspace's `.env.workspace` only | A reviewer reads the exact DDL in the diff. The Migrator brings the advisory lock, the transaction and the bookkeeping table. The repo's `.env` is never loaded, so only a human with the URL in hand can migrate Neon |
 | 2026-10 | Survival is measured on the mainline (the default branch's first-parent chain), and a line's clock starts when it lands there, not at its commit date | Lines that die inside a branch before merging are invisible, so counting branch time would be time in which a line could not be seen to die. Starting at landing also makes squash, rebase and merge-commit repos comparable |

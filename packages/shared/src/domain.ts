@@ -154,18 +154,27 @@ export type SurvivalObservation = z.infer<typeof SurvivalObservationSchema>;
 
 const ShareSchema = z.number().min(0).max(1);
 
-export const SurvivalCurvePointSchema = z.object({
-  day: z.int().min(0),
-  /** S(day): the estimated share of lines that last at least `day` full days. */
-  survival: ShareSchema,
-  /** Lines at risk on `day`. Never 0: where nothing is at risk, survival is unknown and there is no point. */
-  atRisk: z.int().min(1),
-});
+export const SurvivalCurvePointSchema = z
+  .object({
+    day: z.int().min(0),
+    /** S(day): the estimated share of lines that last at least `day` full days. */
+    survival: ShareSchema,
+    /** Lines at risk on `day`. 0 only on the point where survival reaches 0. */
+    atRisk: z.int().min(0),
+  })
+  // Survival is 0 exactly when every line at risk was removed, which leaves nothing at risk. With
+  // nothing at risk and survival above 0 the estimate is unknown, and an unknown has no point.
+  .refine((point) => (point.survival === 0) === (point.atRisk === 0), {
+    path: ['atRisk'],
+    error:
+      'atRisk is 0 exactly when survival is 0: where nothing is at risk and survival is above 0, there is no point',
+  });
 export type SurvivalCurvePoint = z.infer<typeof SurvivalCurvePointSchema>;
 
 /**
  * A step function. Points ascend by day and start at day 0; a value holds until the next point.
- * The last point is the last day with lines at risk, and survival past it is unknown.
+ * A curve that reaches 0 ends on that point and stays 0 after it. Any other curve ends on the last
+ * day with lines at risk, and survival past it is unknown.
  */
 export const SurvivalCurvePointsSchema = z
   .array(SurvivalCurvePointSchema)
@@ -173,6 +182,9 @@ export const SurvivalCurvePointsSchema = z
   .refine((points) => points[0]?.day === 0, { error: 'expected the first point at day 0' })
   .refine((points) => points.every((point, i) => i === 0 || point.day > (points[i - 1]?.day ?? -1)), {
     error: 'expected points in ascending day order with no repeated day',
+  })
+  .refine((points) => points.every((point, i) => point.survival > 0 || i === points.length - 1), {
+    error: 'expected the point where survival reaches 0 to be the last one',
   });
 export type SurvivalCurvePoints = z.infer<typeof SurvivalCurvePointsSchema>;
 
@@ -193,7 +205,10 @@ export const SurvivalMetricSchema = z
     linesRemoved: z.int().min(0),
     /** Lines still alive at `headSha`. */
     linesCensored: z.int().min(0),
-    /** Null when no line has been observed for that many days yet. Never extrapolated. */
+    /**
+     * Null means unknown: no line has been observed that long, and the lines observed longest are
+     * still alive. 0 means every line was removed before that day. Never extrapolated.
+     */
     survival30d: ShareSchema.nullable(),
     survival90d: ShareSchema.nullable(),
     survival180d: ShareSchema.nullable(),
