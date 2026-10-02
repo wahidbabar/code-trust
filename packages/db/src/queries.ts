@@ -2,9 +2,9 @@
 //
 // Writes are built to work without an interactive transaction, which Neon's HTTP driver does not
 // have: each one is a single idempotent statement, an upsert that carries absolute values or a
-// keyed delete. A worker writes in this order: repo, commits, attributions and observations,
-// rollups, then the repo again with its new head. A job that dies midway leaves the old head, and
-// running it again converges. Nothing here calls db.transaction().
+// keyed delete. A worker writes in this order: upsertRepo, commits, attributions and observations,
+// rollups, then setRepoHead. Only setRepoHead moves the head, so a job that dies midway leaves the
+// old one, and running it again converges. Nothing here calls db.transaction().
 //
 // Every write is parsed with its zod schema first, so nothing reaches a table that the contract
 // would reject, attribution evidence included.
@@ -13,6 +13,8 @@ import {
   AttributionSchema,
   type Commit,
   CommitSchema,
+  CommitShaSchema,
+  IsoTimestampSchema,
   type MeasuredCohort,
   type Repo,
   RepoSchema,
@@ -51,8 +53,28 @@ function batches<T>(rows: readonly T[]): T[][] {
 // bigint columns compare against strings, the type the driver returns them as.
 const id = (value: number): string => String(value);
 
-export async function upsertRepo(db: Db, repo: Repo): Promise<void> {
-  const r = RepoSchema.parse(repo);
+/** What GitHub says about a repo. The analyzed head is not part of it; see setRepoHead. */
+export type RepoDetails = Pick<Repo, 'id' | 'owner' | 'name' | 'defaultBranch' | 'installationId'>;
+
+/** The analyzed head, always set as a whole. */
+export type RepoHead = { [Field in 'headSha' | 'headCommittedAt' | 'observedAt']: NonNullable<Repo[Field]> };
+
+/**
+ * Creates the repo with no head, or updates what GitHub says about it. It never touches the head
+ * of an existing repo, so a rename, a reinstall or the first step of a new analysis cannot wipe
+ * the head that the stored metrics belong to.
+ */
+export async function upsertRepo(db: Db, details: RepoDetails): Promise<void> {
+  const r = RepoSchema.parse({
+    id: details.id,
+    owner: details.owner,
+    name: details.name,
+    defaultBranch: details.defaultBranch,
+    installationId: details.installationId,
+    headSha: null,
+    headCommittedAt: null,
+    observedAt: null,
+  });
   await db
     .insertInto('repos')
     .values({
@@ -61,9 +83,6 @@ export async function upsertRepo(db: Db, repo: Repo): Promise<void> {
       name: r.name,
       default_branch: r.defaultBranch,
       installation_id: r.installationId,
-      head_sha: r.headSha,
-      head_committed_at: r.headCommittedAt,
-      observed_at: r.observedAt,
     })
     .onConflict((oc) =>
       oc.column('id').doUpdateSet((eb) => ({
@@ -71,12 +90,27 @@ export async function upsertRepo(db: Db, repo: Repo): Promise<void> {
         name: eb.ref('excluded.name'),
         default_branch: eb.ref('excluded.default_branch'),
         installation_id: eb.ref('excluded.installation_id'),
-        head_sha: eb.ref('excluded.head_sha'),
-        head_committed_at: eb.ref('excluded.head_committed_at'),
-        observed_at: eb.ref('excluded.observed_at'),
       })),
     )
     .execute();
+}
+
+/**
+ * The last write of an analysis: points the repo at the head its stored metrics now describe.
+ * Until this runs the repo keeps its previous head, so a job that dies midway is invisible.
+ * Returns false when the repo does not exist.
+ */
+export async function setRepoHead(db: Db, repoId: number, head: RepoHead): Promise<boolean> {
+  const result = await db
+    .updateTable('repos')
+    .set({
+      head_sha: CommitShaSchema.parse(head.headSha),
+      head_committed_at: IsoTimestampSchema.parse(head.headCommittedAt),
+      observed_at: IsoTimestampSchema.parse(head.observedAt),
+    })
+    .where('id', '=', id(repoId))
+    .executeTakeFirst();
+  return result.numUpdatedRows > 0n;
 }
 
 export async function getRepo(db: Db, repoId: number): Promise<Repo | null> {

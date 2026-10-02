@@ -43,4 +43,4 @@ The tests run against real Postgres, each test file in its own scratch schema. T
 
 ## Writing without transactions
 
-Every write in `src/queries.ts` is one idempotent statement, so the module works on drivers that have no interactive transactions, such as Neon over HTTP. Write in this order: repo, commits, attributions and observations, rollups, then the repo again with its new head. A job that dies midway leaves the old head, and running it again converges.
+Every write in `src/queries.ts` is one idempotent statement, so the module works on drivers that have no interactive transactions, such as Neon over HTTP. Write in this order: `upsertRepo`, commits, attributions and observations, rollups, then `setRepoHead`. Only `setRepoHead` moves a repo's head, so a job that dies midway leaves the old one, and running it again converges.

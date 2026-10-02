@@ -18,6 +18,8 @@ import type { Database } from './database.ts';
 import { migrateToLatest } from './migrator.ts';
 import { createPgDb } from './pg.ts';
 import {
+  type RepoHead,
+  setRepoHead,
   upsertAttributions,
   upsertCommits,
   upsertRepo,
@@ -83,13 +85,22 @@ export async function createTestDatabase(): Promise<TestDatabase> {
   };
 }
 
+/** The head of the analyzed repo fixture, in the shape setRepoHead takes. */
+export const repoHeadFixture: RepoHead = (() => {
+  const { headSha, headCommittedAt, observedAt } = repoFixture;
+  if (headSha === null || headCommittedAt === null || observedAt === null) {
+    throw new Error('repoFixture must be an analyzed repo.');
+  }
+  return { headSha, headCommittedAt, observedAt };
+})();
+
 /** Writes the shared fixtures, one analyzed repo with rows in every table, in the order a worker writes them. */
 export async function seedFixtures(db: Kysely<Database>): Promise<void> {
-  await upsertRepo(db, { ...repoFixture, headSha: null, headCommittedAt: null, observedAt: null });
+  await upsertRepo(db, repoFixture);
   await upsertCommits(db, commitFixtures);
   await upsertAttributions(db, attributionFixtures);
   await upsertSurvivalObservations(db, survivalObservationFixtures);
   await upsertSurvivalRollup(db, { metric: survivalMetricFixture, points: survivalCurveFixture.points });
   await upsertSurvivalRollup(db, { metric: youngSurvivalMetricFixture, points: youngSurvivalCurveFixture.points });
-  await upsertRepo(db, repoFixture);
+  await setRepoHead(db, repoFixture.id, repoHeadFixture);
 }
