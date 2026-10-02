@@ -53,13 +53,14 @@ Run these on the Mac, in Terminal.
 4. Approve, then paste the task's Goal line. The agent loops until the condition holds or the turn cap hits. If Conductor's chat doesn't accept `/goal`, paste the same text without `/goal` and add "keep going until every item holds"; the Stop hook still gates the finish.
 5. When it stops, open the diff with ⌘⇧D and skim it, then send `/ship-lane docs/tasks/T01-foundation.md`. That verifies, runs the reviewer subagent, updates status and opens the PR.
 6. Watch CI in the Checks tab. Merge when it's green and the diff makes sense, then archive the workspace. Archiving drops its database.
-7. If a lane goes sideways, press Esc twice to rewind, or archive it and start fresh with a sharper task file. A clean context with a better prompt beats a long session full of corrections.
+7. If GitHub says the PR has conflicts because another lane merged first, send in that lane's workspace: `Rebase on main and push.` CLAUDE.md has the steps. The guard lets an agent rewrite only its own branch, and only with `--force-with-lease`.
+8. If a lane goes sideways, press Esc twice to rewind, or archive it and start fresh with a sharper task file. A clean context with a better prompt beats a long session full of corrections.
 
 ## Phases
 
 1. **Wave 0, serial:** T01 foundation, then T02 contracts. One workspace at a time, because everything after depends on them.
 2. **Plan wave 1:** in a fresh workspace send `/plan-wave 1`. Review the task files it writes, merge them, then start the first 2 lanes in 2 workspaces.
-3. **Wave 1:** analyzer core, ingest, API read path. When a lane merges, start the next.
+3. **Wave 1:** analyzer core, ingest, API read path. When a lane merges, start the next. A lane that depends on another (T05 on T03) gets its workspace only after that one has merged, so its branch starts from a main that has the code.
 4. **Wave 2:** `/plan-wave 2`, then worker and dispatcher, dashboard, attribution eval gate.
 5. **Hardening:** one deliberate ultracode run, for example `ultracode: audit infra/ against the Cost rules in docs/architecture.md, cross-check each finding`, plus a security review and a trial on real public repos. On Pro, turn dynamic workflows on in `/config` first and keep the size small.
 

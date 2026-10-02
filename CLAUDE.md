@@ -35,6 +35,7 @@ A GitHub App that measures how long AI-attributed code survives in real reposito
 - Small commits with conventional messages, for example `feat(analyzer): blame walker`.
 - An architecture change adds a row to the Decisions table in docs/architecture.md in the same PR.
 - Finish with `/ship-lane <task file>`.
+- If your PR conflicts with main because another lane merged first: `git fetch origin`, then `git rebase origin/main`, and resolve each conflict keeping both sides' rows in docs/STATUS.md and the Decisions table. For `pnpm-lock.yaml`, run `git restore --ours pnpm-lock.yaml` (during a rebase, ours is main), then `pnpm install` and `git add pnpm-lock.yaml`. After `git rebase --continue`, run `pnpm verify:changed` and push with `git push --force-with-lease --force-if-includes origin HEAD`. Plain force pushes are blocked.
 
 ## Style
 
