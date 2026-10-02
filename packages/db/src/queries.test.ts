@@ -21,14 +21,16 @@ import {
   listAttributions,
   listCommits,
   listRepos,
+  listSurvivalMetrics,
   listSurvivalObservations,
+  setRepoHead,
   upsertAttributions,
   upsertCommits,
   upsertRepo,
   upsertSurvivalObservations,
   upsertSurvivalRollup,
 } from './queries.ts';
-import { createTestDatabase, seedFixtures, type TestDatabase, testDatabaseUrl } from './testing.ts';
+import { createTestDatabase, repoHeadFixture, seedFixtures, type TestDatabase, testDatabaseUrl } from './testing.ts';
 
 test('createPgDb refuses a schema name it would have to quote', () => {
   expect(() => createPgDb('postgres://localhost/x', { schema: 'public; drop table repos' })).toThrow(/schema name/);
@@ -59,16 +61,39 @@ describe.skipIf(testDatabaseUrl === null)('queries', () => {
 
     test('an analyzed repo round-trips with its head and last activity', async () => {
       await upsertRepo(scratch.db, newRepoFixture);
-      await upsertRepo(scratch.db, repoFixture);
+      expect(await setRepoHead(scratch.db, REPO_ID, repoHeadFixture)).toBe(true);
       const stored = await getRepo(scratch.db, REPO_ID);
       expect(stored).toEqual(repoFixture);
       expect(stored?.headCommittedAt).toBe(repoFixture.headCommittedAt);
     });
 
-    test('a rename updates the row, since the GitHub id is the key', async () => {
+    test('upsertRepo creates a repo with no head, even when handed one', async () => {
       await upsertRepo(scratch.db, repoFixture);
-      await upsertRepo(scratch.db, { ...repoFixture, name: 'renamed', installationId: null });
+      expect(await getRepo(scratch.db, REPO_ID)).toEqual(newRepoFixture);
+    });
+
+    test('a rename updates the row, since the GitHub id is the key, and keeps the head', async () => {
+      await seedFixtures(scratch.db);
+      await upsertRepo(scratch.db, { ...newRepoFixture, name: 'renamed', installationId: null });
       expect(await listRepos(scratch.db)).toEqual([{ ...repoFixture, name: 'renamed', installationId: null }]);
+    });
+
+    test('a new analysis that dies before its last write leaves the old head and its metrics', async () => {
+      await seedFixtures(scratch.db);
+      const metrics = await listSurvivalMetrics(scratch.db, REPO_ID);
+      // The first writes of the next job, and then nothing: no setRepoHead.
+      await upsertRepo(scratch.db, newRepoFixture);
+      await upsertCommits(scratch.db, commitFixtures);
+      expect(await getRepo(scratch.db, REPO_ID)).toEqual(repoFixture);
+      expect(await listSurvivalMetrics(scratch.db, REPO_ID)).toEqual(metrics);
+    });
+
+    test('setRepoHead moves the head, and reports a repo that does not exist', async () => {
+      await seedFixtures(scratch.db);
+      const next = { ...repoHeadFixture, headSha: '9'.repeat(40), observedAt: '2026-10-02T00:00:00.000Z' };
+      expect(await setRepoHead(scratch.db, REPO_ID, next)).toBe(true);
+      expect(await getRepo(scratch.db, REPO_ID)).toEqual({ ...repoFixture, ...next });
+      expect(await setRepoHead(scratch.db, 404, next)).toBe(false);
     });
 
     test('a missing repo is null', async () => {
@@ -83,8 +108,13 @@ describe.skipIf(testDatabaseUrl === null)('queries', () => {
     });
 
     test('a repo that breaks the contract is refused before it reaches the table', async () => {
-      await expect(upsertRepo(scratch.db, { ...repoFixture, headCommittedAt: null })).rejects.toThrow(/set together/);
+      await expect(upsertRepo(scratch.db, { ...newRepoFixture, owner: 'octo/org' })).rejects.toThrow(/GitHub owner/);
       expect(await getRepo(scratch.db, REPO_ID)).toBeNull();
+      await upsertRepo(scratch.db, newRepoFixture);
+      await expect(setRepoHead(scratch.db, REPO_ID, { ...repoHeadFixture, headSha: 'main' })).rejects.toThrow(
+        /40 lowercase hex/,
+      );
+      expect(await getRepo(scratch.db, REPO_ID)).toEqual(newRepoFixture);
     });
   });
 
