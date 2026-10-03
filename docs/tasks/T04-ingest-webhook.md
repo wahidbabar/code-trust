@@ -1,6 +1,6 @@
 # T04: Ingest (GitHub webhook to SQS, IngestStack)
 
-Status: in progress
+Status: in review
 Wave: 1
 Depends on: T01, T02
 Owner paths (edit only these):
