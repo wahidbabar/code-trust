@@ -1,6 +1,6 @@
 # T03: Analyzer history walker (line lifetimes from git)
 
-Status: in progress
+Status: in review
 Wave: 1
 Depends on: T02
 Owner paths (edit only these):
