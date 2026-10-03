@@ -20,7 +20,7 @@ Why survival: the usual AI coding metric is acceptance, meaning whether someone 
 GitHub App webhook
       │
       ▼
-API Gateway ──► webhook Lambda (verify HMAC signature, fast 200 ack)
+Function URL ──► webhook Lambda (verify HMAC signature, fast 200 ack)
                       │
                       ▼
                    SQS (+ DLQ)
@@ -38,13 +38,13 @@ API Gateway ──► webhook Lambda (verify HMAC signature, fast 200 ack)
    to S3
 ```
 
-1. The GitHub App webhook posts to the API front door.
+1. The GitHub App webhook posts to the webhook Lambda's Function URL. Its auth type is `NONE`: the HMAC signature is the authentication.
 2. A webhook Lambda verifies the HMAC signature and returns a fast `200`. No heavy work inline.
-3. It enqueues the event on SQS, with a DLQ for poison messages.
+3. It enqueues events for public repositories only on SQS, with a DLQ for poison messages.
 4. A dispatcher Lambda consumes the queue and launches one worker per job.
 5. Workers clone the repo, run blame and diff, and compute AI-vs-human survival.
 6. Workers write raw diffs and snapshots to S3 under `raw/`, computed metrics to Neon Postgres, and the GitHub rate-limit budget to DynamoDB.
-7. A NestJS REST API on Lambda reads metrics from Neon and serves a polling dashboard.
+7. A NestJS REST API on Lambda, behind its own Function URL, reads metrics from Neon and serves a polling dashboard.
 
 Public repository history is the load, so the system gets real traffic without fake users.
 
@@ -181,12 +181,17 @@ This repo dogfoods the metric: its commits carry Claude Code's default trailer, 
 | 2026-10 | Every table cascades from `repos`, and attributions and observations also from `commits` | Removing a repo is one `DELETE`. Head columns have no commit key, because the head need not introduce or remove a tracked line |
 | 2026-10 | No human name or email is stored. Attribution evidence is exactly one identity on one line, enforced by the zod schema, the query module and a CHECK | The metric needs no personal data. The schema can prove "one identity", not "that identity is an AI": the analyzer lane must test that its matcher only ever emits identities from its AI list |
 | 2026-10 | The db tests run against real Postgres in a scratch schema. With no database they skip on a laptop and fail in CI | A lane that only touches `packages/shared` still runs them as a dependent, and Docker being stopped should not block it. In CI a skip would be a green run that proved nothing |
+| 2026-10 | The front door is a Lambda Function URL with auth type `NONE`: for the webhook now, and for the API on Lambda in wave 2. The webhook's HMAC signature is its authentication | A Function URL is free and adds nothing that bills while idle. An API Gateway HTTP API bills per request once the free year ends, and its route throttling and custom domains are not needed for one POST endpoint. CDK adds both grants a URL has needed since October 2025, `lambda:InvokeFunctionUrl` and `lambda:InvokeFunction` through the URL only; without the second, callers get a 403. The stack ID `CodeTrustIngest` and the construct IDs `WebhookFunction` and `FunctionUrl` never change after the first deploy, because a new ID means a new URL. Lambda refuses requests over about 6 MB, while GitHub sends up to 25 MB: such a push is lost, and the next push catches up |
+| 2026-10 | Private repositories never enter the pipeline. A push is enqueued only when `repository.private` is false and `visibility`, when present, is `public`. An installation's repositories are enqueued only when `private` is false | The read API has no auth, so anything queued could end up public. Repositories that turn private later, and the data of uninstalled ones, are wave 2's job |
+| 2026-10 | The webhook's IAM role is explicit and holds only `sqs:SendMessage` on the events queue, `ssm:GetParameter` on the secret parameter, and log writes to its own log group | CDK's default role attaches `AWSLambdaBasicExecutionRole`, whose log actions apply to every resource, and CDK's grant helpers add queue and parameter actions the function never calls. There is no `kms:Decrypt`, so the parameter must use the AWS-managed `aws/ssm` key, whose policy allows use through SSM |
+| 2026-10 | The events queue and its DLQ both keep messages 14 days, the SQS maximum, with `maxReceiveCount` 5 | Storage is free, and events wait there for the wave 2 consumer. The cost: a standard queue's DLQ counts expiry from the original enqueue, so a message that waited long before failing has little time left in the DLQ, and an expired message skips the DLQ entirely. Wave 2 may shorten the events queue's retention once a consumer runs, and must keep its visibility timeout above the consumer's timeout, or synth fails validation (E3505) |
+| 2026-10 | esbuild is a root devDependency. Lambda bundles are CommonJS from `NodejsFunction` on a pinned runtime (`NODEJS_24_X`), with `@aws-sdk/*` and `@smithy/*` taken from the runtime | `NodejsFunction` runs `pnpm exec esbuild` from its project root, which must contain both the entry and the lockfile, so it is the workspace root, where `pnpm exec` sees only the root's binaries. With esbuild only in `infra`, synth fails. `NODEJS_LATEST` would bundle the whole SDK. CommonJS means a handler's import graph may not use `import.meta` or top-level await |
+| 2026-10 | The webhook times out after 8 seconds, and its SDK clients make at most 2 attempts, with a 1 second connection timeout and a 1.5 second request timeout that throws | The SDK sets no timeouts by default, so a hung SSM or SQS call would run until Lambda killed the function, and nothing would be logged. With these, a hung call becomes the handler's own logged 500 well inside GitHub's 10 seconds. `throwOnRequestTimeout` is needed because since `@smithy/node-http-handler` 4.4.0 a request timeout alone only logs a warning |
 
 ## Open decisions
 
 | Question | Options | Decide in |
 | --- | --- | --- |
-| API front door | API Gateway HTTP API (current plan; bills per request once credits end, cents at this scale) or Lambda Function URL (free, fewer features) | Ingest lane |
 | Worker runtime | Fargate `RunTask` (current plan; no free tier, cents per job) or Lambda (always-free compute, 15 minute and 10 GB limits) | Worker lane, with real repo sizes |
 | Files left out of the metric | Generated, vendored and lock files churn for reasons unrelated to who wrote them. Options: a fixed path list, `.gitattributes` `linguist-generated`, or both | Analyzer lane, with real repos |
 | Neon driver on Lambda | Over HTTP (`kysely-neon`, one request per query, no connection to keep alive) or a WebSocket `Pool` (sessions and transactions) | The first lane that runs on Lambda |
