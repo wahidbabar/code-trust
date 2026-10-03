@@ -34,30 +34,39 @@ export function blameArgs(
 /** Runs blame and returns the answer for each final line number (1-based). */
 export async function blame(git: Git, args: readonly string[]): Promise<Map<number, BlamedLine>> {
   const { stdout } = await git.run(args);
-  return parseLinePorcelain(stdout.toString('latin1'));
+  return parseLinePorcelain(stdout);
 }
 
 /**
  * Parses `--line-porcelain`: per line a header `<sha> <orig> <final>[ <count>]`, then key lines,
- * then the content prefixed by a TAB. Every line carries its own `filename`.
+ * then the content prefixed by a TAB. Every line carries its own `filename`. Works row by row on
+ * the bytes and never decodes content, so a huge file cannot exceed V8's string length limit.
  */
-export function parseLinePorcelain(output: string): Map<number, BlamedLine> {
+export function parseLinePorcelain(output: Uint8Array): Map<number, BlamedLine> {
+  const buffer = Buffer.from(output.buffer, output.byteOffset, output.byteLength);
   const lines = new Map<number, BlamedLine>();
-  const rows = output.split('\n');
-  let i = 0;
-  while (i < rows.length) {
-    const header = rows[i] as string;
-    if (header === '' && i === rows.length - 1) break;
+  let pos = 0;
+  const rowEnd = (): number => {
+    const end = buffer.indexOf(0x0a, pos);
+    return end < 0 ? buffer.length : end;
+  };
+  const readRow = (): string => {
+    const end = rowEnd();
+    const row = buffer.toString('latin1', pos, end);
+    pos = end + 1;
+    return row;
+  };
+  while (pos < buffer.length) {
+    const header = readRow();
     const match = /^([0-9a-f]{40}) \d+ (\d+)(?: \d+)?$/.exec(header);
     if (!match) throw new Error(`unexpected git blame output: ${JSON.stringify(header.slice(0, 80))}`);
     let filename: string | null = null;
-    i++;
-    for (; i < rows.length && !(rows[i] as string).startsWith('\t'); i++) {
-      const row = rows[i] as string;
+    while (buffer[pos] !== 0x09) {
+      if (pos >= buffer.length) throw new Error('git blame output ended before a line');
+      const row = readRow();
       if (row.startsWith('filename ')) filename = row.slice('filename '.length);
     }
-    if (i >= rows.length) throw new Error('git blame output ended before a line');
-    i++; // the content line
+    pos = rowEnd() + 1; // the content line, skipped undecoded
     if (filename === null) throw new Error(`git blame printed no filename for line ${match[2]}`);
     lines.set(Number(match[2]), { sha: match[1] as string, filename });
   }

@@ -98,3 +98,37 @@ describe('pathArg', () => {
     expect(() => pathArg('caf\xe9.txt')).toThrow(/not valid UTF-8/);
   });
 });
+
+describe('BlobReader framing', () => {
+  test('a read that names a tree or a missing object is rejected without shifting the answers to later reads', async () => {
+    const repo = ScriptedRepo.create();
+    repo.write({ 'dir/a.txt': 'one\ntwo\n', 'b.bin': Buffer.from('x\0y\n'), 'c.txt': 'c\n\n' });
+    repo.commit('one\n');
+    const blob = (path: string): string => repo.git(['rev-parse', `HEAD:${path}`]).trim();
+    const tree = repo.git(['rev-parse', 'HEAD:dir']).trim();
+    const reader = new BlobReader(new Git(repo.dir));
+    try {
+      const reads = await Promise.allSettled([
+        reader.read(blob('dir/a.txt')),
+        reader.read(tree),
+        reader.read('f'.repeat(40)),
+        reader.read(blob('b.bin')),
+        reader.read(blob('c.txt')),
+      ]);
+      expect(reads.map((read) => (read.status === 'fulfilled' ? read.value.nonBlankCount : read.status))).toEqual([
+        2,
+        'rejected',
+        'rejected',
+        0,
+        1,
+      ]);
+      expect(reads[3]).toMatchObject({ status: 'fulfilled', value: { binary: true } });
+      expect(reads[1]).toMatchObject({
+        status: 'rejected',
+        reason: { message: expect.stringMatching(/is a tree, not a blob/) },
+      });
+    } finally {
+      await reader.close();
+    }
+  });
+});

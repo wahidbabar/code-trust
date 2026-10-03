@@ -45,25 +45,39 @@ export async function runCheck(details: WalkDetails, head: HeadCount, maxDiffere
   const pool = new Pool();
   const { git } = details.repository;
   const headSha = details.result.headSha;
+  const withLines = [...details.files].filter(([, lines]) => lines.some((owner) => owner !== BLANK));
+  const files = withLines.filter(([path]) => isPassablePath(path));
+  // Each file is compared as soon as its blame returns, so only counts and a few differences
+  // stay in memory, not every file's blame at once.
+  const perFile = await Promise.all(
+    files.map(([path, lines]) =>
+      pool.run(async () => {
+        const answer = await blame(git, blameArgs(headSha, path));
+        let compared = 0;
+        let matched = 0;
+        const differences: BlameDifference[] = [];
+        lines.forEach((owner, index) => {
+          if (owner === BLANK) return;
+          compared++;
+          const walker = details.commitShas[owner] as string;
+          const blamed = answer.get(index + 1)?.sha ?? '(none)';
+          if (walker === blamed) matched++;
+          else if (differences.length < maxDifferences) {
+            differences.push({ path: displayPath(path), line: index + 1, walker, blame: blamed });
+          }
+        });
+        return { compared, matched, differences };
+      }),
+    ),
+  );
   let blameCompared = 0;
   let blameMatched = 0;
   const blameDifferences: BlameDifference[] = [];
-  const withLines = [...details.files].filter(([, lines]) => lines.some((owner) => owner !== BLANK));
-  const files = withLines.filter(([path]) => isPassablePath(path));
-  const answers = await Promise.all(files.map(([path]) => pool.run(() => blame(git, blameArgs(headSha, path)))));
-  files.forEach(([path, lines], i) => {
-    const answer = answers[i];
-    lines.forEach((owner, index) => {
-      if (owner === BLANK) return;
-      blameCompared++;
-      const walker = details.commitShas[owner] as string;
-      const blamed = answer?.get(index + 1)?.sha ?? '(none)';
-      if (walker === blamed) blameMatched++;
-      else if (blameDifferences.length < maxDifferences) {
-        blameDifferences.push({ path: displayPath(path), line: index + 1, walker, blame: blamed });
-      }
-    });
-  });
+  for (const file of perFile) {
+    blameCompared += file.compared;
+    blameMatched += file.matched;
+    blameDifferences.push(...file.differences.slice(0, maxDifferences - blameDifferences.length));
+  }
   return {
     files: paths.size,
     fileDifferences,
