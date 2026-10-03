@@ -1,4 +1,9 @@
 {
   "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // The walk script runs under Node's type stripping, which cannot run enums, namespaces or
+    // parameter properties. This makes tsc reject them before the script does.
+    "erasableSyntaxOnly": true
+  },
   "include": ["src"]
 }
