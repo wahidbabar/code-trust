@@ -363,13 +363,17 @@ interface BlobRequest {
  */
 export class BlobReader {
   private readonly child: ReturnType<typeof spawn>;
-  private readonly queue: BlobRequest[] = [];
+  /** Requests in the order git answers them; `head` is the one being answered. */
+  private queue: BlobRequest[] = [];
+  private head = 0;
   private readonly closed: Promise<number>;
   private readonly stderr = new Tail();
   private header: Buffer[] = [];
   private remaining = -1;
   private size = 0;
   private trailer = false;
+  /** Set while the body of an object that is not a blob is being skipped: the error its request gets. */
+  private skipping: GitError | null = null;
   private failure: Error | undefined;
 
   constructor(git: Git) {
@@ -411,17 +415,19 @@ export class BlobReader {
   private onData(chunk: Buffer): void {
     let pos = 0;
     while (pos < chunk.length) {
-      const request = this.queue[0];
+      const request = this.queue[this.head];
       if (!request) {
         this.fail(new GitError('git cat-file wrote output nobody asked for', { args: ['cat-file'] }));
         return;
       }
       if (this.trailer) {
-        // The newline git writes after each blob's content.
+        // The newline git writes after each object's content.
         pos++;
         this.trailer = false;
-        this.queue.shift();
-        request.resolve(request.counter.finish(this.size));
+        this.advance();
+        if (this.skipping) request.reject(this.skipping);
+        else request.resolve(request.counter.finish(this.size));
+        this.skipping = null;
         continue;
       }
       if (this.remaining < 0) {
@@ -434,19 +440,24 @@ export class BlobReader {
         pos = newline + 1;
         const line = Buffer.concat(this.header).toString('latin1');
         this.header = [];
-        const match = /^([0-9a-f]+) (\w+) (\d+)$/.exec(line);
-        if (match?.[2] !== 'blob') {
-          this.queue.shift();
+        const match = /^[0-9a-f]+ (\S+) (\d+)$/.exec(line);
+        if (!match) {
+          // "<sha> missing" and "<sha> ambiguous" have no body.
+          this.advance();
           request.reject(
             new GitError(`git cat-file could not read blob ${request.sha}: ${line}`, { args: ['cat-file'] }),
           );
           continue;
         }
-        this.size = Number(match[3]);
+        this.size = Number(match[2]);
         this.remaining = this.size;
+        if (match[1] !== 'blob') {
+          // Skip its body too, so the next answer is read from the right byte.
+          this.skipping = new GitError(`${request.sha} is a ${match[1]}, not a blob`, { args: ['cat-file'] });
+        }
       }
       const take = Math.min(this.remaining, chunk.length - pos);
-      request.counter.push(chunk.subarray(pos, pos + take));
+      if (!this.skipping) request.counter.push(chunk.subarray(pos, pos + take));
       pos += take;
       this.remaining -= take;
       if (this.remaining === 0) {
@@ -456,8 +467,20 @@ export class BlobReader {
     }
   }
 
+  /** Moves to the next request. Answered ones are dropped in batches, since shift() is linear in the queue length. */
+  private advance(): void {
+    this.head++;
+    if (this.head >= 1024 && this.head * 2 >= this.queue.length) {
+      this.queue = this.queue.slice(this.head);
+      this.head = 0;
+    }
+  }
+
   private fail(error: Error): void {
     this.failure ??= error;
-    for (const request of this.queue.splice(0)) request.reject(this.failure);
+    const pending = this.queue.slice(this.head);
+    this.queue = [];
+    this.head = 0;
+    for (const request of pending) request.reject(this.failure);
   }
 }
