@@ -4,6 +4,10 @@ import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterAll, describe, expect, test } from 'vitest';
 import {
+  AUTHOR,
+  BASE_TIME,
+  COMMITTER,
+  DAY,
   isoAt,
   labelGroups,
   makeTempDir,
@@ -13,7 +17,7 @@ import {
   textLines,
   walkChecked,
 } from './testing.ts';
-import { walkHistory } from './walk.ts';
+import { walkHistory, walkHistoryDetailed } from './walk.ts';
 
 afterAll(removeTempDirs);
 
@@ -283,6 +287,55 @@ describe('merges', () => {
         { introducedBy: 'm', removedBy: null, lineCount: 3 },
       ]),
     );
+  });
+
+  test('a merge that adds lines to a file whose name is not valid UTF-8 gives them to the merge instead of failing', async () => {
+    const repo = ScriptedRepo.create();
+    // Blame cannot be asked about such a name (Node passes argv as UTF-8), and APFS will not
+    // store one, so these commits are built with plumbing.
+    const latin1Name = 'caf\xe9.txt';
+    const blob = (text: string): string => repo.git(['hash-object', '-w', '--stdin'], { input: text }).trim();
+    const tree = (files: Record<string, string>): string => {
+      const entries = Object.entries(files).map(([path, sha]) =>
+        Buffer.concat([Buffer.from(`100644 blob ${sha}\t`), Buffer.from(path, 'latin1'), Buffer.of(0)]),
+      );
+      return repo.git(['mktree', '-z'], { input: Buffer.concat(entries) }).trim();
+    };
+    let day = 0;
+    const commit = (treeSha: string, parents: string[], message: string): string => {
+      day++;
+      const at = `@${BASE_TIME + day * DAY} +0000`;
+      const env = {
+        GIT_AUTHOR_NAME: AUTHOR.name,
+        GIT_AUTHOR_EMAIL: AUTHOR.email,
+        GIT_AUTHOR_DATE: at,
+        GIT_COMMITTER_NAME: COMMITTER.name,
+        GIT_COMMITTER_EMAIL: COMMITTER.email,
+        GIT_COMMITTER_DATE: at,
+      };
+      return repo
+        .git(['commit-tree', treeSha, ...parents.flatMap((parent) => ['-p', parent]), '-m', message], { env })
+        .trim();
+    };
+    const base = blob('base\n');
+    const edited = blob('base\nbranch\n');
+    const other = blob('main\n');
+    const c1 = commit(tree({ [latin1Name]: base }), [], 'base');
+    const b1 = commit(tree({ [latin1Name]: edited }), [c1], 'branch');
+    const c2 = commit(tree({ [latin1Name]: base, 'main.txt': other }), [c1], 'main');
+    const m = commit(tree({ [latin1Name]: edited, 'main.txt': other }), [c2, b1], 'merge');
+    repo.git(['update-ref', 'refs/heads/main', m]);
+
+    const result = await walkChecked(repo);
+
+    expect(labelGroups(result, { c1, c2, m })).toEqual(
+      sortGroups([
+        { introducedBy: 'c1', removedBy: null, lineCount: 1 },
+        { introducedBy: 'c2', removedBy: null, lineCount: 1 },
+        { introducedBy: 'm', removedBy: null, lineCount: 1 },
+      ]),
+    );
+    expect((await walkHistoryDetailed({ repoDir: repo.dir })).unblamableLines).toBe(1);
   });
 
   test("a repository's own config cannot change the result", async () => {
