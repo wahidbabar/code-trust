@@ -36,7 +36,7 @@ describe('the mainline diff stream', () => {
     expect(text.endsWith(`␀commit ${empty}␀`)).toBe(true);
   });
 
-  test('raw entries come first, then a NUL separator, then patches; a whitespace-only change has a raw entry and no patch, and its separator can end the stream', async () => {
+  test('raw entries come first, then a NUL separator, then patches; a whitespace-only change gets no patch, and its separator can end the stream', async () => {
     const repo = ScriptedRepo.create();
     repo.write({ 'a.txt': 'x\n  y\n', 'b.txt': 'b\n' });
     const first = repo.commit('one\n');
@@ -50,11 +50,12 @@ describe('the mainline diff stream', () => {
         `^␀commit ${first}␀\\n:000000 100644 0{40} [0-9a-f]{40} A␀a\\.txt␀:000000 100644 0{40} [0-9a-f]{40} A␀b\\.txt␀␀diff --git a/a\\.txt b/a\\.txt\\n`,
       ),
     );
-    expect(
-      text.endsWith(
-        `␀commit ${last}␀\n:100644 100644 ${repo.git(['rev-parse', `${first}:a.txt`]).trim()} ${repo.git(['rev-parse', `${last}:a.txt`]).trim()} M␀a.txt␀␀`,
-      ),
-    ).toBe(true);
+    // Git 2.50 still lists the whitespace-only change as a raw entry; git 2.55 drops it and
+    // writes the separator straight after the newline. Neither writes a patch for it.
+    const blobs = `${repo.git(['rev-parse', `${first}:a.txt`]).trim()} ${repo.git(['rev-parse', `${last}:a.txt`]).trim()}`;
+    expect([`␀commit ${last}␀\n:100644 100644 ${blobs} M␀a.txt␀␀`, `␀commit ${last}␀\n␀`]).toContain(
+      text.slice(text.lastIndexOf('␀commit ')),
+    );
   });
 
   test('a typechange is a deletion and a creation under one header', async () => {

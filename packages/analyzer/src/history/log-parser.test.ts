@@ -121,6 +121,38 @@ describe('MainlineLogParser', () => {
     expect(parseAll([...whole].map((byte) => Uint8Array.of(byte)))).toEqual(EXPECTED);
   });
 
+  test('accepts the layout git 2.55 writes for a whitespace-only commit (a newline, no raw entries, then the separator), and raw entries with no separator before the next commit', () => {
+    const stream = bytes(
+      [
+        `\0commit ${A}\0\n\0`,
+        `\0commit ${B}\0\n:100644 100644 ${BLOB1} ${BLOB2} M\0a.txt\0`,
+        `\0commit ${C}\0\n\0`,
+      ].join(''),
+    );
+    const expected = [
+      { sha: A, entries: [] },
+      {
+        sha: B,
+        entries: [
+          {
+            oldMode: 0o100644,
+            newMode: 0o100644,
+            oldBlob: BLOB1,
+            newBlob: BLOB2,
+            status: 'M',
+            oldPath: 'a.txt',
+            newPath: 'a.txt',
+            sections: [],
+          },
+        ],
+      },
+      { sha: C, entries: [] },
+    ];
+    for (let split = 1; split < stream.length; split++) {
+      expect(parseAll([stream.subarray(0, split), stream.subarray(split)])).toEqual(expected);
+    }
+  });
+
   test('reads hunk counts, zero-length sides, markers between removed and added lines, and function-name text after the second @@', () => {
     const stream = [
       `\0commit ${A}\0\n`,

@@ -22,6 +22,8 @@ export const MAX_HEADER_BYTES = 1024 * 1024;
 const NUL = 0x00;
 const LF = 0x0a;
 const COLON = 0x3a;
+/** `c`, the first byte of `commit <sha>`. A patch line after the separator starts with `d` (`diff --git`). */
+const COMMIT_START = 0x63;
 const PLUS = 0x2b;
 const MINUS = 0x2d;
 const SPACE = 0x20;
@@ -119,6 +121,7 @@ type State =
   | 'commit' // at a commit record: expect NUL
   | 'after-header' // expect LF (a diff follows), NUL (next commit) or the end
   | 'raw' // expect ':' (a raw entry) or NUL (the separator)
+  | 'after-raw' // after the separator: a patch, the next commit's record, or the end
   | 'line' // at the start of a patch line
   | 'body-start' // at the start of a hunk body line
   | 'body'; // inside a hunk body line
@@ -185,14 +188,23 @@ export class MainlineLogParser {
           if (byte === COLON) {
             this.startToken('raw-meta', NUL);
           } else if (byte === NUL) {
-            if (this.currentCommit().entries.length === 0) {
-              this.finishCommit();
-            } else {
-              pos++; // the separator between raw entries and patches
-              this.state = 'line';
-            }
+            // The separator after the raw entries. Git 2.55 writes it even when a whitespace-only
+            // change leaves no raw entry at all; the byte after it says what follows.
+            pos++;
+            this.state = 'after-raw';
           } else {
             throw new LogParseError(`expected a raw entry in commit ${this.commit?.sha}, found byte ${byte}`);
+          }
+          break;
+        case 'after-raw':
+          if (byte === NUL) {
+            this.finishCommit(); // the next commit's record
+          } else if (byte === COMMIT_START) {
+            // No separator after all: the NUL just read began the next commit's record.
+            this.finishCommit();
+            this.startToken('commit-header', NUL);
+          } else {
+            this.state = 'line';
           }
           break;
         case 'line':
