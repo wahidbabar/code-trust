@@ -59,7 +59,12 @@ async function main(dir: string, head: string | undefined, check: boolean): Prom
     'left out',
     counted.rules.map((rule) => `${rule.name}: ${rule.lines} lines in ${plural(rule.files, 'file')}`),
   );
-  print('merges', `${details.merges} (${details.blameJobs} blame jobs, ${Math.round(details.blameMs)} ms)`);
+  print('merges', [
+    `${details.merges} (${details.blameJobs} blame jobs, ${Math.round(details.blameMs)} ms)`,
+    ...(details.unblamableLines > 0
+      ? [`${details.unblamableLines} lines in files whose names are not valid UTF-8 went to their merge`]
+      : []),
+  ]);
   print(
     'rename limit',
     details.renameSkipped.length === 0
@@ -88,6 +93,9 @@ async function main(dir: string, head: string | undefined, check: boolean): Prom
     const share = report.blameCompared === 0 ? 100 : (100 * report.blameMatched) / report.blameCompared;
     print('blame -w', [
       `${share.toFixed(2)}% of alive lines (${report.blameMatched} of ${report.blameCompared}) name the same introducing commit as git blame -w at the head`,
+      ...(report.blameSkippedFiles > 0
+        ? [`  ${plural(report.blameSkippedFiles, 'file')} skipped: names that are not valid UTF-8`]
+        : []),
       ...report.blameDifferences.map(
         (difference) =>
           `  ${difference.path}:${difference.line} walker=${difference.walker.slice(0, 7)} blame=${difference.blame.slice(0, 7)}`,

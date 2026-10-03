@@ -27,7 +27,14 @@ test('on a repository with a merge, every file matches the blobs and every alive
 
   const report = await runCheck(details, head);
 
-  expect(report).toEqual({ files: 2, fileDifferences: [], blameCompared: 7, blameMatched: 7, blameDifferences: [] });
+  expect(report).toEqual({
+    files: 2,
+    fileDifferences: [],
+    blameCompared: 7,
+    blameMatched: 7,
+    blameDifferences: [],
+    blameSkippedFiles: 0,
+  });
   expect(head.rules[0]).toEqual({ name: 'lock files', files: 1, lines: 4 });
 });
 

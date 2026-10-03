@@ -12,6 +12,7 @@ import {
   EMPTY_TREE,
   Git,
   GitError,
+  isPassablePath,
   literalPathspec,
 } from './git.ts';
 import { cQuote, MainlineLogParser, mainlineLogArgs, type ParsedCommit, type RawEntry } from './log-parser.ts';
@@ -59,6 +60,8 @@ export interface WalkDetails {
   blameMs: number;
   /** Mainline commits with more added and deleted files than git's rename limit, so only exact renames were found. */
   renameSkipped: string[];
+  /** Lines merges added to files whose names are not valid UTF-8. Blame cannot be asked about them, so they belong to the merge. */
+  unblamableLines: number;
 }
 
 /** Walks the first-parent history of `head` and returns every measured line's introducer and fate. */
@@ -86,6 +89,7 @@ export async function walkHistoryDetailed(options: WalkOptions): Promise<WalkDet
     blameJobs: walker.blameJobs,
     blameMs: walker.blameMs,
     renameSkipped: walker.renameSkipped,
+    unblamableLines: walker.unblamableLines,
   };
 }
 
@@ -221,6 +225,7 @@ class Walker {
   blameJobs = 0;
   blameMs = 0;
   readonly renameSkipped: string[] = [];
+  unblamableLines = 0;
 
   constructor(git: Git, mainline: MainlineCommit[], rules: readonly LeftOutRule[]) {
     this.git = git;
@@ -295,6 +300,13 @@ class Walker {
   private async blameMerge(position: number, path: string, lines: readonly number[]): Promise<Map<number, string>> {
     const merge = this.mainlineAt(position);
     const parent = merge.parents[0] as string;
+    if (!isPassablePath(path)) {
+      // Node passes argv as UTF-8, so a name that is not valid UTF-8 cannot reach blame. Rather
+      // than fail the whole repository, the merge owns these lines, as rule 3 does when blame
+      // cannot name a branch commit, and the walk counts them.
+      this.unblamableLines += lines.length;
+      return new Map(lines.map((line) => [line, merge.sha]));
+    }
     const started = performance.now();
     const answer = await this.pool.run(() =>
       blame(this.git, blameArgs(`${parent}..${merge.sha}`, path, toRanges(lines))),
@@ -342,6 +354,8 @@ class Walker {
 
   /** Whether the left-out rules match `path`. Matched by git, cached per path. */
   private isLeftOut(path: string, sha: string): Promise<boolean> {
+    // A name git cannot be asked about counts as measured, so blame's answer stands.
+    if (!isPassablePath(path)) return Promise.resolve(false);
     let answer = this.leftOutPaths.get(path);
     if (!answer) {
       const excludes = measuredPathspecs(this.rules).slice(1);

@@ -249,13 +249,20 @@ export function assertSupportedGitVersion(output: string): void {
  * so a path goes back to git through this. A path that is not valid UTF-8 cannot be passed at all.
  */
 export function pathArg(path: string): string {
-  const utf8 = Buffer.from(path, 'latin1').toString('utf8');
-  if (Buffer.from(utf8, 'utf8').toString('latin1') !== path) {
-    throw new GitError(`the path ${JSON.stringify(utf8)} is not valid UTF-8, so it cannot be passed to git`, {
-      args: [],
-    });
+  if (!isPassablePath(path)) {
+    throw new GitError(
+      `the path ${JSON.stringify(displayPath(path))} is not valid UTF-8, so it cannot be passed to git`,
+      {
+        args: [],
+      },
+    );
   }
-  return utf8;
+  return displayPath(path);
+}
+
+/** Whether pathArg can pass `path` to git: its bytes are valid UTF-8. */
+export function isPassablePath(path: string): boolean {
+  return Buffer.from(displayPath(path), 'utf8').toString('latin1') === path;
 }
 
 /** A path for people to read. Lossy for bytes that are not UTF-8. */

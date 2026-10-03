@@ -1,7 +1,7 @@
 // `walk --check`: recounts the alive lines per file from the head's blobs, and compares each alive
 // line's introducing commit with what `git blame -w` says at the head.
 import { blame, blameArgs, Pool } from './blame.ts';
-import { displayPath } from './git.ts';
+import { displayPath, isPassablePath } from './git.ts';
 import type { HeadCount } from './head-count.ts';
 import { BLANK } from './tracker.ts';
 import type { WalkDetails } from './walk.ts';
@@ -28,6 +28,8 @@ export interface CheckReport {
   blameMatched: number;
   /** The first `maxDifferences` lines where the walker and blame disagree. */
   blameDifferences: BlameDifference[];
+  /** Files left out of the blame comparison because their names are not valid UTF-8. */
+  blameSkippedFiles: number;
 }
 
 export async function runCheck(details: WalkDetails, head: HeadCount, maxDifferences = 10): Promise<CheckReport> {
@@ -46,7 +48,8 @@ export async function runCheck(details: WalkDetails, head: HeadCount, maxDiffere
   let blameCompared = 0;
   let blameMatched = 0;
   const blameDifferences: BlameDifference[] = [];
-  const files = [...details.files].filter(([, lines]) => lines.some((owner) => owner !== BLANK));
+  const withLines = [...details.files].filter(([, lines]) => lines.some((owner) => owner !== BLANK));
+  const files = withLines.filter(([path]) => isPassablePath(path));
   const answers = await Promise.all(files.map(([path]) => pool.run(() => blame(git, blameArgs(headSha, path)))));
   files.forEach(([path, lines], i) => {
     const answer = answers[i];
@@ -61,5 +64,12 @@ export async function runCheck(details: WalkDetails, head: HeadCount, maxDiffere
       }
     });
   });
-  return { files: paths.size, fileDifferences, blameCompared, blameMatched, blameDifferences };
+  return {
+    files: paths.size,
+    fileDifferences,
+    blameCompared,
+    blameMatched,
+    blameDifferences,
+    blameSkippedFiles: withLines.length - files.length,
+  };
 }
