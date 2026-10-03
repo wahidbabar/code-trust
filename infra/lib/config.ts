@@ -32,3 +32,13 @@ export function resolveAlertEmail(env: Env): string {
       'Only `pnpm synth` may run without it.',
   );
 }
+
+// IngestStack. The webhook secret is an SSM SecureString under the AWS-managed key, created by
+// hand: CloudFormation cannot create a SecureString.
+export const WEBHOOK_SECRET_PARAMETER_NAME = '/code-trust/github-webhook-secret';
+// SQS's maximum. Storage is free, and events wait here until the wave 2 consumer exists.
+export const QUEUE_RETENTION_DAYS = 14;
+export const EVENTS_MAX_RECEIVE_COUNT = 5;
+export const WEBHOOK_MEMORY_MB = 256;
+// Below GitHub's 10 second delivery timeout, so the function's own 500 reaches GitHub first.
+export const WEBHOOK_TIMEOUT_SECONDS = 8;
