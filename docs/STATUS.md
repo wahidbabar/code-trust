@@ -6,7 +6,7 @@
 | T02 | Contracts: shared schemas, queue messages, DB schema | 0 | done | T01 | [#2](https://github.com/wahidbabar/code-trust/pull/2) |
 | T03 | Analyzer: history walker (line lifetimes from git) | 1 | done | T02 | [#5](https://github.com/wahidbabar/code-trust/pull/5) |
 | T04 | Ingest: GitHub webhook to SQS, IngestStack | 1 | done | T01, T02 | [#4](https://github.com/wahidbabar/code-trust/pull/4) |
-| T05 | Analyzer: attribution, survival estimator, `analyzeRepo` | 1 | in review | T03 | |
+| T05 | Analyzer: attribution, survival estimator, `analyzeRepo` | 1 | in review | T03 | [#7](https://github.com/wahidbabar/code-trust/pull/7) |
 | T06 | API read path (NestJS REST, local server) | 1 | in review | T02 | [#6](https://github.com/wahidbabar/code-trust/pull/6) |
 
 ## Deployed
