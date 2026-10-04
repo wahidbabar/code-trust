@@ -106,7 +106,11 @@ export const AttributionSchema = z
     /** Slug of the AI tool, such as `claude`. Free-form so a new tool needs no contract change. */
     tool: z.string().regex(/^[a-z0-9][a-z0-9-]{0,39}$/, 'expected a tool slug: lowercase letters, digits and dashes'),
     confidence: z.number().min(0).max(1),
-    /** The matched AI trailer or AI identity, as written in the commit. Never a human name or email. */
+    /**
+     * Built from the matched entry of the analyzer's AI list, not copied from the commit:
+     * `Co-Authored-By: <name> <email>` for a trailer, `<name> <email>` for an identity. Never a
+     * human name or email.
+     */
     evidence: z
       .string()
       .max(EVIDENCE_MAX_LENGTH)
