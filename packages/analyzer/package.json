@@ -12,6 +12,7 @@
     "lint": "biome check .",
     "format": "biome format --write .",
     "test": "vitest run",
+    "analyze": "node --experimental-strip-types --disable-warning=ExperimentalWarning src/cli.ts",
     "walk": "node --experimental-strip-types --disable-warning=ExperimentalWarning src/history/cli.ts"
   },
   "dependencies": {
