@@ -30,6 +30,8 @@ export const AI_IDENTITIES: readonly AiIdentity[] = [
   { email: 'noreply@anthropic.com', name: 'Claude', tool: 'claude' },
   // The git identity Anthropic's CI auto-fix example gives the commits Claude makes:
   // https://github.com/anthropics/claude-code-action/blob/cab360f6565aa35a51d6ce9e43f1f4287c0a32ea/examples/ci-failure-auto-fix.yml
+  // The example sets it with `git config --global`, so in a workflow job copied from it, any other
+  // step that commits also commits as claude[bot] and counts as ai.
   { email: 'claude[bot]@users.noreply.github.com', name: 'claude[bot]', tool: 'claude' },
   // GitHub's Copilot coding agent, as author, in GitHub's own repository:
   // https://github.com/github/github-mcp-server/commit/7fd6a92cef38f0ab4796bae53716f510d3d4c8b3
