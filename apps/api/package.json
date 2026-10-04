@@ -11,7 +11,9 @@
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",
     "format": "biome format --write .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "dev": "node --env-file-if-exists=../../.env.workspace --import tsx src/main.ts",
+    "seed": "node --experimental-strip-types --env-file-if-exists=../../.env.workspace src/seed.ts"
   },
   "dependencies": {
     "@code-trust/db": "workspace:*",
