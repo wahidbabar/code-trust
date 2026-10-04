@@ -1,6 +1,6 @@
 # T06: API read path (NestJS REST)
 
-Status: planned
+Status: in review
 Wave: 1
 Depends on: T02
 Owner paths (edit only these):

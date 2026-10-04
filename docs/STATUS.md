@@ -7,7 +7,7 @@
 | T03 | Analyzer: history walker (line lifetimes from git) | 1 | done | T02 | [#5](https://github.com/wahidbabar/code-trust/pull/5) |
 | T04 | Ingest: GitHub webhook to SQS, IngestStack | 1 | done | T01, T02 | [#4](https://github.com/wahidbabar/code-trust/pull/4) |
 | T05 | Analyzer: attribution, survival estimator, `analyzeRepo` | 1 | planned | T03 | |
-| T06 | API read path (NestJS REST, local server) | 1 | planned | T02 | |
+| T06 | API read path (NestJS REST, local server) | 1 | in review | T02 | |
 
 ## Deployed
 
