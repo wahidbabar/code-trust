@@ -1,6 +1,6 @@
 # T05: Analyzer attribution, survival estimator and `analyzeRepo`
 
-Status: in review
+Status: done
 Wave: 1
 Depends on: T03 (merged to main before this starts)
 Owner paths (edit only these):
