@@ -9,7 +9,7 @@ Why survival: the usual AI coding metric is acceptance, meaning whether someone 
 - TypeScript 7 everywhere, ESM, strict.
 - pnpm workspaces monorepo.
 - AWS CDK v2 (`aws-cdk-lib`) for all infrastructure, in TypeScript.
-- Region `ap-south-1`. All compute is arm64 (Lambda `arm64`, Fargate `ARM64`).
+- Region `ap-south-1`. All compute is arm64 Lambda. Postgres is in Neon's `aws-ap-southeast-1` (Singapore).
 - NestJS with REST for the API. GraphQL was considered and dropped.
 - Postgres on Neon's free tier, not RDS.
 - Defaults set with the agent harness (T01 may change them with a recorded reason): Vitest for tests, Biome for lint and format.
@@ -23,28 +23,29 @@ GitHub App webhook
 Function URL ──► webhook Lambda (verify HMAC signature, fast 200 ack)
                       │
                       ▼
-                   SQS (+ DLQ)
+              events queue: SQS (+ DLQ)
                       │
                       ▼
-              dispatcher Lambda (ECS RunTask)
+               dispatcher Lambda
                       │
                       ▼
-      on-demand Fargate ARM64 git workers
+      jobs queue: SQS FIFO (+ DLQ), MessageGroupId = repo id
+                      │
+                      ▼
+      worker Lambda, arm64, git from a layer
       (clone, blame, diff, compute AI-vs-human survival)
-        │                 │                     │
-        ▼                 ▼                     ▼
-   raw diffs/          metrics to        rate-limit budget
-   snapshots           Neon Postgres     to DynamoDB
-   to S3
+                      │
+                      ▼
+          Neon Postgres (Singapore) ◄── API Lambda ◄── Function URL ◄── dashboard (GitHub Pages)
 ```
 
 1. The GitHub App webhook posts to the webhook Lambda's Function URL. Its auth type is `NONE`: the HMAC signature is the authentication.
 2. A webhook Lambda verifies the HMAC signature and returns a fast `200`. No heavy work inline.
-3. It enqueues events for public repositories only on SQS, with a DLQ for poison messages.
-4. A dispatcher Lambda consumes the queue and launches one worker per job.
-5. Workers clone the repo, run blame and diff, and compute AI-vs-human survival.
-6. Workers write raw diffs and snapshots to S3 under `raw/`, computed metrics to Neon Postgres, and the GitHub rate-limit budget to DynamoDB.
-7. A NestJS REST API on Lambda, behind its own Function URL, reads metrics from Neon and serves a polling dashboard.
+3. It enqueues events for public repositories only on SQS, with a DLQ for poison messages. Events that mean a repo's data must go (it turned private, was deleted, or the App lost access) are enqueued too.
+4. A dispatcher Lambda consumes the events queue and sends one job per event to an SQS FIFO jobs queue, with the repo id as the message group, so a repo's jobs run one at a time and in order.
+5. A worker Lambda takes each job. An analyze job clones the repo's default branch, runs blame and diff, and computes AI-vs-human survival. A delete job removes everything stored about the repo.
+6. Workers write computed metrics to Neon Postgres. Not built yet: S3 `raw/` snapshots and a DynamoDB rate-limit budget. The wave 2 worker clones public repos anonymously and calls no GitHub API, and nothing reads raw snapshots.
+7. A NestJS REST API on Lambda, behind its own Function URL, reads metrics from Neon. The dashboard, a static site on GitHub Pages, polls it; the Function URL's CORS allows only that origin.
 
 Public repository history is the load, so the system gets real traffic without fake users.
 
@@ -58,7 +59,7 @@ Public repository history is the load, so the system gets real traffic without f
 | `apps/ingest` | Webhook Lambda (verify, ack, enqueue) and dispatcher Lambda. |
 | `apps/worker` | Job runner around the analyzer: clone, analyze, write results. |
 | `apps/api` | NestJS REST API on Lambda. |
-| `apps/dashboard` | Polling dashboard, a static site. |
+| `apps/dashboard` | Polling dashboard, a static site on GitHub Pages. |
 | `infra` | CDK app with one stack per concern: `FoundationStack` first, then `IngestStack`, `WorkerStack`, `ApiStack` and so on. |
 
 Lanes own disjoint paths. A change that several lanes need goes into `packages/shared` as a small serial task first.
@@ -193,19 +194,21 @@ This repo dogfoods the metric: its commits carry Claude Code's default trailer, 
 | 2026-10 | A `Co-Authored-By` trailer counts on any line of the message that, once trimmed, is one complete trailer (key in any case, at least one space after the colon), not only in git's last paragraph. A mention inside a sentence does not count | A squash merge carries the squashed commits' trailers in the middle of its body: GitHub lists each commit's message under a bullet, and `git merge --squash` indents every message by four spaces. Squash repos are common, and reading only the last paragraph would put their AI commits in the human baseline. The cost: a message that quotes a complete AI trailer on a line of its own counts as AI |
 | 2026-10 | Both signals match on the email alone: an exact match against the AI list, without regard to case. A name never matches, and nothing matches by substring or pattern | Tools write many names over one email (Claude Code writes `Claude` and `Claude Opus 5.5 (1M context)`), and a name proves nothing: a person named Claude must not land in `ai`, and `noreply@anthropic.com.example.org` is not Anthropic's. The cost: a tool that marks only the name, such as aider's default `(aider)` suffix, is missed. An AI bot account missing from the list lands in `automation`, out of both curves, so a missing entry costs recall, while a weak entry, such as a trailer a tool writes for any assistance, costs precision. That is why the list leaves out the `Copilot` trailer VS Code adds whenever a Copilot feature touched the change. The list's rules, sources and exclusions are in `packages/analyzer/src/attribution/identities.ts` |
 | 2026-10 | Attribution evidence is built from the matched list entry, `Co-Authored-By: <name> <email>` for a trailer and `<name> <email>` for an identity, never copied from the commit | Every stored identity is then on the AI list by construction, so no human name is stored even when a trailer puts a person's name on an AI email, and no evidence exceeds `EVIDENCE_MAX_LENGTH`. The analyzer's property test checks this over seeded random commits. The cost: evidence does not show the commit's exact text, such as the model name in `Claude Opus 5.5 (1M context)` or the key's casing |
+| 2026-10 | The worker runs on Lambda (arm64), not Fargate. No VPC. git is packaged for the Lambda runtime as a layer. Repos that need more than 15 minutes or 10 GB are out of scope until the hardening trial | AWS credits end 2026-10-26 and Fargate has no free tier, while Lambda's compute stays inside the always-free tier at this scale. Without a VPC the function reaches GitHub and Neon directly, with no NAT. A job past Lambda's limits fails, is retried, and ends in the jobs DLQ |
+| 2026-10 | Per-repo ordering: the dispatcher sends jobs to an SQS FIFO queue with `MessageGroupId` set to the repo id | One repo never has two jobs at once, and a late job cannot move the head back |
+| 2026-10 | The dashboard is a static site on GitHub Pages. The API's Function URL allows that origin through its CORS configuration, and no other | Free, with no AWS resource to bill or secure. CORS on the Function URL keeps the rule in the template, where a reviewer sees it |
+| 2026-10 | Neon runs Postgres 17 in `aws-ap-southeast-1` (Singapore), migrated to `0001_init`, with the compute pinned to 0.25 CU. The direct (non-pooler) URL is the SSM SecureString `/code-trust/database-url`, with `sslmode=verify-full` | Neon has no Mumbai region. Every query crosses from Mumbai to Singapore, so the worker batches its writes and each API request makes only a few queries. The free plan has 100 CU-hours a month and suspends the compute after 5 idle minutes, so the dashboard polls every 10 minutes and only while its tab is visible |
 
 ## Open decisions
 
 | Question | Options | Decide in |
 | --- | --- | --- |
-| Worker runtime | Fargate `RunTask` (current plan; no free tier, cents per job) or Lambda (always-free compute, 15 minute and 10 GB limits) | Worker lane, with real repo sizes |
 | Files left out of the metric | The fixed path list is decided (see Decisions). Still open: whether to also honour `.gitattributes` `linguist-generated` and `linguist-vendored`, read per commit, and which paths the list misses | Hardening trial on public repos |
-| Neon driver on Lambda | Over HTTP (`kysely-neon`, one request per query, no connection to keep alive) or a WebSocket `Pool` (sessions and transactions) | The first lane that runs on Lambda |
-| Dashboard hosting | S3 plus CloudFront, or a free static host | Dashboard lane |
+| Neon driver on Lambda | Over HTTP (one request per query, no connection to keep alive) or a WebSocket `Pool` (sessions and transactions) | T08 |
 
 ## Build order
 
 0. T01 foundation, then T02 contracts. Serial.
 1. Wave 1: analyzer core, ingest (webhook to SQS), API read path.
-2. Wave 2: worker and dispatcher, dashboard, attribution eval gate.
+2. Wave 2: contracts first (T07 queue messages, T08 database access from Lambda), then worker and dispatcher, API on Lambda, dashboard, repo removal, attribution eval gate.
 3. Hardening: cost audit, security review, trial on real public repos.
