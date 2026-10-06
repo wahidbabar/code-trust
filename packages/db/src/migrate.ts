@@ -3,6 +3,8 @@
 // The package script passes --env-file-if-exists for the workspace's .env.workspace, so in a
 // Conductor workspace this targets the workspace database with no setup. A DATABASE_URL already in
 // the environment wins, which is how a human points it at Neon. `.env` is never loaded.
+import { inspect } from 'node:util';
+import { parseDatabaseUrl, redactSecrets } from './database-url.ts';
 import { migrateToLatest } from './migrator.ts';
 import { createPgDb } from './pg.ts';
 
@@ -15,8 +17,15 @@ if (!url) {
   process.exit(1);
 }
 
+let target: URL;
+try {
+  target = parseDatabaseUrl(url);
+} catch (error) {
+  console.error((error as Error).message);
+  process.exit(1);
+}
+
 // Host and database only: the URL carries a password.
-const target = new URL(url);
 console.log(`Migrating ${target.pathname.slice(1)} on ${target.host}`);
 
 const db = createPgDb(url);
@@ -25,7 +34,7 @@ try {
   if (applied.length === 0) console.log('Nothing to apply: the schema is up to date.');
   for (const name of applied) console.log(`Applied ${name}`);
 } catch (error) {
-  console.error(error);
+  console.error(redactSecrets(inspect(error), target));
   process.exitCode = 1;
 } finally {
   await db.destroy();
