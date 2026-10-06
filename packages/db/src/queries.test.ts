@@ -10,19 +10,25 @@ import {
   survivalMetricFixture,
   survivalObservationFixtures,
 } from '@code-trust/shared/fixtures';
-import type { Kysely } from 'kysely';
+import { type CompiledQuery, Kysely, PostgresDialect } from 'kysely';
+import { Pool } from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'vitest';
 import type { Database } from './database.ts';
 import { createPgDb } from './pg.ts';
 import {
+  type AttributionKey,
+  deleteAttributionsExcept,
+  deleteCommitsExcept,
   deleteRepo,
   deleteSurvivalObservations,
+  deleteSurvivalObservationsExcept,
   getRepo,
   listAttributions,
   listCommits,
   listRepos,
   listSurvivalMetrics,
   listSurvivalObservations,
+  type SurvivalObservationKey,
   setRepoHead,
   upsertAttributions,
   upsertCommits,
@@ -31,6 +37,7 @@ import {
   upsertSurvivalRollup,
 } from './queries.ts';
 import { createTestDatabase, repoHeadFixture, seedFixtures, type TestDatabase, testDatabaseUrl } from './testing.ts';
+import { installNeonShim, type NeonShim } from './testing-neon.ts';
 
 test('createPgDb refuses a schema name it would have to quote', () => {
   expect(() => createPgDb('postgres://localhost/x', { schema: 'public; drop table repos' })).toThrow(/schema name/);
@@ -193,6 +200,9 @@ describe.skipIf(testDatabaseUrl === null)('queries', () => {
 
       await seedFixtures(noTransactions);
       await deleteSurvivalObservations(noTransactions, REPO_ID, [{ introducedBy: SHA.aiRecent, removedBy: null }]);
+      await deleteCommitsExcept(noTransactions, REPO_ID, [SHA.aiOld]);
+      await deleteAttributionsExcept(noTransactions, REPO_ID, []);
+      await deleteSurvivalObservationsExcept(noTransactions, REPO_ID, []);
       await upsertSurvivalRollup(noTransactions, {
         metric: survivalMetricFixture,
         points: survivalCurveFixture.points,
@@ -200,6 +210,145 @@ describe.skipIf(testDatabaseUrl === null)('queries', () => {
       expect(await deleteRepo(noTransactions, REPO_ID)).toBe(true);
       expect(() => noTransactions.transaction()).toThrow(/db\.transaction/);
       expect(survivalObservationFixtures.length).toBeGreaterThan(0);
+    });
+  });
+});
+
+describe.skipIf(testDatabaseUrl === null)('prunes', () => {
+  const OTHER_ID = REPO_ID + 1;
+  let scratch: TestDatabase;
+  let shim: NeonShim;
+  let neonDb: Kysely<Database>;
+  // node-postgres with a query log, so the tests can count bind parameters per statement.
+  let loggedPg: Kysely<Database>;
+  const pgStatements: CompiledQuery[] = [];
+
+  beforeAll(async () => {
+    scratch = await createTestDatabase();
+    shim = installNeonShim();
+    neonDb = shim.connect({ schema: scratch.schema }).db;
+    loggedPg = new Kysely<Database>({
+      dialect: new PostgresDialect({
+        pool: new Pool({ connectionString: testDatabaseUrl ?? '', options: `-c search_path=${scratch.schema}` }),
+      }),
+      log: (event) => {
+        if (event.level === 'query') pgStatements.push(event.query);
+      },
+    });
+  });
+
+  afterAll(async () => {
+    await loggedPg?.destroy();
+    await shim?.close();
+    await scratch?.destroy();
+  });
+
+  // The fixtures, and a second repo with the same commits, which no prune of REPO_ID may touch.
+  beforeEach(async () => {
+    for (const repo of await listRepos(scratch.db)) await deleteRepo(scratch.db, repo.id);
+    await seedFixtures(scratch.db);
+    const other = <T extends { repoId: number }>(rows: T[]) => rows.map((row) => ({ ...row, repoId: OTHER_ID }));
+    await upsertRepo(scratch.db, { ...newRepoFixture, id: OTHER_ID, name: 'other' });
+    await upsertCommits(scratch.db, other(commitFixtures));
+    await upsertAttributions(scratch.db, other(attributionFixtures));
+    await upsertSurvivalObservations(scratch.db, other(survivalObservationFixtures));
+  });
+
+  const stored = async (repoId: number) => ({
+    commits: (await listCommits(scratch.db, repoId)).map((c) => c.sha).sort(),
+    attributions: (await listAttributions(scratch.db, repoId))
+      .map((a) => `${a.commitSha[0]} ${a.signal} ${a.tool}`)
+      .sort(),
+    observations: (await listSurvivalObservations(scratch.db, repoId))
+      .map((o) => `${o.introducedBy[0]}-${o.removedBy?.[0] ?? 'alive'}`)
+      .sort(),
+  });
+
+  const dialects = {
+    'node-postgres': () => ({ db: loggedPg, binds: () => pgStatements.map((query) => query.parameters.length) }),
+    neon: () => ({ db: neonDb, binds: () => shim.requests.map((request) => request.params.length) }),
+  };
+
+  describe.each(Object.keys(dialects) as (keyof typeof dialects)[])('through %s', (dialect) => {
+    const handle = () => dialects[dialect]();
+
+    test('deleteCommitsExcept keeps exactly the listed commits and removes the rest with their attributions and observations', async () => {
+      const otherBefore = await stored(OTHER_ID);
+      const removed = await deleteCommitsExcept(handle().db, REPO_ID, [SHA.aiOld, SHA.aiRecent, SHA.removerOne]);
+      expect(removed).toBe(2);
+      expect(await stored(REPO_ID)).toEqual({
+        commits: [SHA.aiOld, SHA.aiRecent, SHA.removerOne],
+        attributions: ['a co_author_trailer claude', 'b co_author_trailer claude'],
+        observations: ['a-alive', 'a-c', 'b-alive'],
+      });
+      expect(await stored(OTHER_ID)).toEqual(otherBefore);
+    });
+
+    test("deleteCommitsExcept with an empty list removes all of the repo's commits", async () => {
+      const otherBefore = await stored(OTHER_ID);
+      expect(await deleteCommitsExcept(handle().db, REPO_ID, [])).toBe(commitFixtures.length);
+      expect(await stored(REPO_ID)).toEqual({ commits: [], attributions: [], observations: [] });
+      expect(await getRepo(scratch.db, REPO_ID)).toEqual(repoFixture);
+      expect(await stored(OTHER_ID)).toEqual(otherBefore);
+    });
+
+    test('deleteAttributionsExcept keeps exactly the listed keys and removes the others of a kept commit', async () => {
+      const otherBefore = await stored(OTHER_ID);
+      const keep: AttributionKey[] = [
+        { commitSha: SHA.aiOld, signal: 'co_author_trailer', tool: 'claude' },
+        { commitSha: SHA.agent, signal: 'author_identity', tool: 'copilot' },
+        // The same commit under another signal is a different key.
+        { commitSha: SHA.aiRecent, signal: 'author_identity', tool: 'claude' },
+      ];
+      expect(await deleteAttributionsExcept(handle().db, REPO_ID, keep)).toBe(1);
+      const after = await stored(REPO_ID);
+      expect(after.attributions).toEqual(['a co_author_trailer claude', 'e author_identity copilot']);
+      expect(after.commits).toHaveLength(commitFixtures.length);
+      expect(await stored(OTHER_ID)).toEqual(otherBefore);
+    });
+
+    test('deleteSurvivalObservationsExcept keeps exactly the listed keys, an alive group next to a removed group of the same commit', async () => {
+      const otherBefore = await stored(OTHER_ID);
+      const keep: SurvivalObservationKey[] = [
+        { introducedBy: SHA.aiOld, removedBy: SHA.removerOne },
+        { introducedBy: SHA.aiOld, removedBy: null },
+        // Not stored, and it must not keep the alive group of the same commit.
+        { introducedBy: SHA.aiRecent, removedBy: SHA.removerOne },
+      ];
+      expect(await deleteSurvivalObservationsExcept(handle().db, REPO_ID, keep)).toBe(2);
+      expect((await stored(REPO_ID)).observations).toEqual(['a-alive', 'a-c']);
+      expect(await stored(OTHER_ID)).toEqual(otherBefore);
+    });
+
+    test('a 5000-key keep list is one statement with a fixed number of binds', async () => {
+      const fake = (i: number) => (i + 1).toString(16).padStart(40, '0');
+      const shas = [...commitFixtures.map((c) => c.sha), ...Array.from({ length: 4995 }, (_, i) => fake(i))];
+      const attributionKeys: AttributionKey[] = [
+        ...attributionFixtures,
+        ...Array.from({ length: 4997 }, (_, i) => ({
+          commitSha: fake(i),
+          signal: 'co_author_trailer' as const,
+          tool: 'claude',
+        })),
+      ];
+      const observationKeys: SurvivalObservationKey[] = [
+        ...survivalObservationFixtures,
+        ...Array.from({ length: 4996 }, (_, i) => ({
+          introducedBy: fake(i),
+          removedBy: i % 2 === 0 ? null : fake(i + 1),
+        })),
+      ];
+      expect([shas.length, attributionKeys.length, observationKeys.length]).toEqual([5000, 5000, 5000]);
+
+      const { db, binds } = handle();
+      const before = await stored(REPO_ID);
+      const start = binds().length;
+      expect(await deleteCommitsExcept(db, REPO_ID, shas)).toBe(0);
+      expect(await deleteAttributionsExcept(db, REPO_ID, attributionKeys)).toBe(0);
+      expect(await deleteSurvivalObservationsExcept(db, REPO_ID, observationKeys)).toBe(0);
+      // repo id plus one array per key column.
+      expect(binds().slice(start)).toEqual([2, 4, 3]);
+      expect(await stored(REPO_ID)).toEqual(before);
     });
   });
 });
