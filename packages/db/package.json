@@ -17,7 +17,8 @@
     "lint": "biome check .",
     "format": "biome format --write .",
     "test": "vitest run",
-    "migrate": "node --experimental-strip-types --env-file-if-exists=../../.env.workspace src/migrate.ts"
+    "migrate": "node --experimental-strip-types --env-file-if-exists=../../.env.workspace src/migrate.ts",
+    "smoke:neon": "node --experimental-strip-types src/smoke-neon.ts"
   },
   "dependencies": {
     "@code-trust/shared": "workspace:*",
