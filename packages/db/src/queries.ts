@@ -2,15 +2,21 @@
 //
 // Writes are built to work without an interactive transaction, which Neon's HTTP driver does not
 // have: each one is a single idempotent statement, an upsert that carries absolute values or a
-// keyed delete. A worker writes in this order: upsertRepo, commits, attributions and observations,
-// rollups, then setRepoHead. Only setRepoHead moves the head, so a job that dies midway leaves the
-// old one, and running it again converges. Nothing here calls db.transaction().
+// keyed delete. A worker writes in this order: upsertRepo, commits, attributions, observations,
+// deleteCommitsExcept, deleteAttributionsExcept, deleteSurvivalObservationsExcept, rollups, then
+// setRepoHead. Only setRepoHead moves the head, so a job that dies midway leaves the old one, and
+// running it again converges. Nothing here calls db.transaction().
+//
+// One thing does not converge: a measured cohort left with no lines gets no rollup from the
+// analyzer, so its old rollup row stays. That row names an older head, and readers filter rollups
+// on the repo's head, so it is never shown. Removing it is left to hardening.
 //
 // Every write is parsed with its zod schema first, so nothing reaches a table that the contract
 // would reject, attribution evidence included.
 import {
   type Attribution,
   AttributionSchema,
+  AttributionSignalSchema,
   type Commit,
   CommitSchema,
   CommitShaSchema,
@@ -26,7 +32,7 @@ import {
   type SurvivalObservation,
   SurvivalObservationSchema,
 } from '@code-trust/shared';
-import type { Kysely } from 'kysely';
+import { type Kysely, type SqlBool, sql } from 'kysely';
 import type { Database } from './database.ts';
 import { toAttribution, toCommit, toRepo, toSurvivalCurve, toSurvivalMetric, toSurvivalObservation } from './rows.ts';
 
@@ -40,6 +46,9 @@ export interface SurvivalRollup {
 
 /** Names one group of lines in survival_observations. */
 export type SurvivalObservationKey = Pick<SurvivalObservation, 'introducedBy' | 'removedBy'>;
+
+/** Names one attribution of a commit. */
+export type AttributionKey = Pick<Attribution, 'commitSha' | 'signal' | 'tool'>;
 
 // Postgres takes at most 65535 bind parameters per statement; the widest row here binds 6.
 const BATCH_ROWS = 1000;
@@ -250,6 +259,90 @@ export async function deleteSurvivalObservations(
       )
       .execute();
   }
+}
+
+// The prunes below make a repo's stored rows equal the latest analysis. Each is one statement
+// whatever the size of its keep list: the list travels as array parameters and is read with unnest,
+// so a long list adds no bind parameters. An empty list keeps nothing.
+
+/**
+ * Removes the repo's commits that are not in `keepShas`, and through the cascades their
+ * attributions and every observation they introduced or removed. `keepShas` must therefore name
+ * every commit a kept attribution or observation refers to. Returns the number of commits removed.
+ */
+export async function deleteCommitsExcept(db: Db, repoId: number, keepShas: readonly string[]): Promise<number> {
+  const keep = CommitShaSchema.array().parse(keepShas);
+  const result = await db
+    .deleteFrom('commits')
+    .where('repo_id', '=', id(repoId))
+    .where(
+      sql<SqlBool>`not exists (
+        select from unnest(${keep}::text[]) as keep(sha)
+        where keep.sha = commits.sha
+      )`,
+    )
+    .executeTakeFirst();
+  return Number(result.numDeletedRows);
+}
+
+/** Removes the repo's attributions that are not in `keepKeys`. Returns the number removed. */
+export async function deleteAttributionsExcept(
+  db: Db,
+  repoId: number,
+  keepKeys: readonly AttributionKey[],
+): Promise<number> {
+  // Parsed a column at a time: the columns are what travel as arrays.
+  const shas = CommitShaSchema.array().parse(keepKeys.map((key) => key.commitSha));
+  const signals = AttributionSignalSchema.array().parse(keepKeys.map((key) => key.signal));
+  const tools = AttributionSchema.shape.tool.array().parse(keepKeys.map((key) => key.tool));
+  const result = await db
+    .deleteFrom('attributions')
+    .where('repo_id', '=', id(repoId))
+    .where(
+      sql<SqlBool>`not exists (
+        select from unnest(
+          ${shas}::text[],
+          ${signals}::text[],
+          ${tools}::text[]
+        ) as keep(commit_sha, signal, tool)
+        where keep.commit_sha = attributions.commit_sha
+          and keep.signal = attributions.signal
+          and keep.tool = attributions.tool
+      )`,
+    )
+    .executeTakeFirst();
+  return Number(result.numDeletedRows);
+}
+
+/**
+ * Removes the repo's observation groups whose (introducedBy, removedBy) is not in `keepKeys`. A null
+ * removedBy (an alive group) matches only a null, the same rule as the table's unique constraint.
+ * Returns the number of groups removed.
+ */
+export async function deleteSurvivalObservationsExcept(
+  db: Db,
+  repoId: number,
+  keepKeys: readonly SurvivalObservationKey[],
+): Promise<number> {
+  const introducedBy = CommitShaSchema.array().parse(keepKeys.map((key) => key.introducedBy));
+  const removedBy = CommitShaSchema.nullable()
+    .array()
+    .parse(keepKeys.map((key) => key.removedBy));
+  const result = await db
+    .deleteFrom('survival_observations')
+    .where('repo_id', '=', id(repoId))
+    .where(
+      sql<SqlBool>`not exists (
+        select from unnest(
+          ${introducedBy}::text[],
+          ${removedBy}::text[]
+        ) as keep(introduced_by, removed_by)
+        where keep.introduced_by = survival_observations.introduced_by
+          and keep.removed_by is not distinct from survival_observations.removed_by
+      )`,
+    )
+    .executeTakeFirst();
+  return Number(result.numDeletedRows);
 }
 
 /** A repo's observations, or only those whose introducing commit is in `cohort`: the input to one survival curve. */
