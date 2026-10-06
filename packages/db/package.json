@@ -6,6 +6,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./migrator": "./src/migrator.ts",
     "./neon": "./src/neon.ts",
     "./pg": "./src/pg.ts",
     "./testing": "./src/testing.ts",

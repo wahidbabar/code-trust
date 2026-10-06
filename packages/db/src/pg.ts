@@ -1,6 +1,5 @@
-// The node-postgres dialect: local Postgres, CI and the migrate script. The lane that first runs
-// on Lambda adds Neon's serverless driver as a second dialect next to this file; the queries are
-// written against Kysely<Database> and do not change.
+// The node-postgres dialect: local Postgres, CI and the migrate script. Lambda uses the Neon
+// dialect in neon.ts instead; the queries are written against Kysely<Database> and work on both.
 import { Kysely, PostgresDialect } from 'kysely';
 import { Pool } from 'pg';
 import type { Database } from './database.ts';
