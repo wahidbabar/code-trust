@@ -1,6 +1,6 @@
 # T07: Queue contracts for wave 2 (job messages, repo removal events)
 
-Status: planned
+Status: in progress
 Wave: 2 (serial, before the lanes that read the queues)
 Depends on: T02
 Owner paths (edit only these):
