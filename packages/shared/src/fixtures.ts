@@ -13,7 +13,7 @@ import type {
   SurvivalMetric,
   SurvivalObservation,
 } from './domain.ts';
-import type { AnalysisJobMessage, RepoEventMessage } from './queue.ts';
+import type { AnalysisJobMessage, DeleteRepoJobMessage, RepoEventMessage } from './queue.ts';
 
 const DAY_MS = 86_400_000;
 
@@ -258,10 +258,25 @@ export const repositoryAddedEventFixture: RepoEventMessage = {
   repo: { id: REPO_ID, owner: 'octo-org', name: 'hello.world' },
 };
 
+/** The repo went private: its data must go. */
+export const repositoryRemovedEventFixture: RepoEventMessage = {
+  version: 1,
+  type: 'repository_removed',
+  deliveryId: 'e4c1b7a0-2f5d-11ef-9a3c-8d2e6f1b4c70',
+  receivedAt: '2026-10-01T09:32:00.000Z',
+  installationId: INSTALLATION_ID,
+  repo: { id: REPO_ID, owner: 'octo-org', name: 'hello.world' },
+  reason: 'privatized',
+};
+
+// Each job carries the delivery of the event that caused it: pushEventFixture, then
+// repositoryAddedEventFixture, then repositoryRemovedEventFixture.
 export const analysisJobFixture: AnalysisJobMessage = {
   version: 1,
+  type: 'analyze',
   jobId: '3f2b8c1e-7a4d-4e9b-9c0a-5d6e7f8a9b0c',
   requestedAt: '2026-10-01T09:30:01.000Z',
+  deliveryId: pushEventFixture.deliveryId,
   reason: 'push',
   installationId: INSTALLATION_ID,
   repo: { id: REPO_ID, owner: 'octo-org', name: 'hello.world' },
@@ -272,8 +287,19 @@ export const analysisJobFixture: AnalysisJobMessage = {
 export const backfillJobFixture: AnalysisJobMessage = {
   ...analysisJobFixture,
   jobId: '9a1c7e52-0b3f-4d68-8e2a-1f4b6c8d0e2f',
+  deliveryId: repositoryAddedEventFixture.deliveryId,
   reason: 'backfill',
   headSha: null,
+};
+
+export const deleteRepoJobFixture: DeleteRepoJobMessage = {
+  version: 1,
+  type: 'delete_repo',
+  jobId: 'c7d2e9a4-1b6f-4c38-a5e0-6f9b3d1a7e24',
+  requestedAt: '2026-10-01T09:32:01.000Z',
+  deliveryId: repositoryRemovedEventFixture.deliveryId,
+  repo: { id: REPO_ID, owner: 'octo-org', name: 'hello.world' },
+  reason: 'privatized',
 };
 
 const { installationId: _installationId, ...apiRepo } = repoFixture;
