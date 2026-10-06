@@ -1,0 +1,7 @@
+# The Amazon Linux 2023 aarch64 packages the git layer is built from, as exact
+# name-version-release.arch. build.sh downloads exactly these and nothing else.
+# git-core gives git and git-remote-http. The public.ecr.aws/lambda/nodejs:24 arm64 image already
+# has every library they load (libcurl, OpenSSL, krb5, pcre2, zlib and the rest), so no library
+# package is pinned. If the image drops one, the build names it and the package to add here.
+# README.md says how to re-pin.
+git-core-2.50.1-1.amzn2023.0.1.aarch64
