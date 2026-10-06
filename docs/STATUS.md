@@ -9,7 +9,7 @@
 | T05 | Analyzer: attribution, survival estimator, `analyzeRepo` | 1 | done | T03 | [#7](https://github.com/wahidbabar/code-trust/pull/7) |
 | T06 | API read path (NestJS REST, local server) | 1 | done | T02 | [#6](https://github.com/wahidbabar/code-trust/pull/6) |
 | T07 | Queue contracts: job messages, repo removal events | 2 (serial) | in review | T02 | [#9](https://github.com/wahidbabar/code-trust/pull/9) |
-| T08 | Database access from Lambda: Neon dialect, bundle-safe entry, prune queries | 2 (serial) | in progress | T02 | |
+| T08 | Database access from Lambda: Neon dialect, bundle-safe entry, prune queries | 2 (serial) | in review | T02 | |
 | T09 | Worker job runner: clone, analyze, write; delete | 2 | planned | T07, T08 | |
 | T10 | API on Lambda: handler, Neon, `ApiStack`, CORS | 2 | planned | T06, T08 | |
 | T11 | Git for the Lambda runtime: layer from AL2023 packages | 2 | planned | T01 | |
