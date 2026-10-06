@@ -120,6 +120,9 @@ importers:
       '@code-trust/shared':
         specifier: workspace:*
         version: link:../shared
+      '@neondatabase/serverless':
+        specifier: ^1.2.0
+        version: 1.2.0
       kysely:
         specifier: ^0.29.6
         version: 0.29.6
@@ -453,6 +456,10 @@ packages:
   '@lukeed/csprng@1.1.0':
     resolution: {integrity: sha512-Z7C/xXCiGWsg0KuKsHTKJxbWhpI3Vs5GwLfOean7MGyVFGqdRgBbAjOCh6u4bbjPc/8MJ2pZmK/0DLdCbivLDA==}
     engines: {node: '>=8'}
+
+  '@neondatabase/serverless@1.2.0':
+    resolution: {integrity: sha512-tnaqgixUengZQNd9ZrS3ytQfamJzLKY8QxgqWQTNHHtB+KrFQWk77JTbbpg4RD+J3qE4eO2lVytvGDX5Kj6FdQ==}
+    engines: {node: '>=19.0.0'}
 
   '@nestjs/common@12.1.2':
     resolution: {integrity: sha512-e2tvLcEaG18sJy5IXrdSLv0ZBpR5djWxypCLkLuMAEFCvVPYL1lEIhvAMBkarlg+ZA8tbZN40J0tFurUl9NpdA==}
@@ -1847,6 +1854,8 @@ snapshots:
       '@jridgewell/sourcemap-codec': 1.6.0
 
   '@lukeed/csprng@1.1.0': {}
+
+  '@neondatabase/serverless@1.2.0': {}
 
   '@nestjs/common@12.1.2(reflect-metadata@0.2.2)(rxjs@7.8.2)':
     dependencies:

@@ -6,8 +6,10 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./neon": "./src/neon.ts",
     "./pg": "./src/pg.ts",
-    "./testing": "./src/testing.ts"
+    "./testing": "./src/testing.ts",
+    "./testing-neon": "./src/testing-neon.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -18,6 +20,7 @@
   },
   "dependencies": {
     "@code-trust/shared": "workspace:*",
+    "@neondatabase/serverless": "^1.2.0",
     "kysely": "^0.29.6",
     "pg": "^8.23.1"
   },
