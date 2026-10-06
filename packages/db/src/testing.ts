@@ -69,17 +69,47 @@ export interface TestDatabase {
   destroy(): Promise<void>;
 }
 
+// Test files run in parallel, each in its own scratch schema. Kysely's Migrator reads every schema
+// in the database before it takes its own lock, and Postgres fails that read with "schema does not
+// exist" when another file drops its schema at the same moment. So migrations hold this advisory
+// lock shared, and drops hold it alone.
+const SCRATCH_SCHEMA_LOCK = sql`hashtext('code-trust scratch schemas')`;
+
+async function withScratchSchemaLock<T>(
+  db: Kysely<Database>,
+  mode: 'shared' | 'exclusive',
+  work: (connection: Kysely<Database>) => Promise<T>,
+): Promise<T> {
+  // A session lock, held on one reserved connection while `work` may use the others.
+  return db.connection().execute(async (connection) => {
+    await (mode === 'shared'
+      ? sql`select pg_advisory_lock_shared(${SCRATCH_SCHEMA_LOCK})`
+      : sql`select pg_advisory_lock(${SCRATCH_SCHEMA_LOCK})`
+    ).execute(connection);
+    try {
+      return await work(connection);
+    } finally {
+      await (mode === 'shared'
+        ? sql`select pg_advisory_unlock_shared(${SCRATCH_SCHEMA_LOCK})`
+        : sql`select pg_advisory_unlock(${SCRATCH_SCHEMA_LOCK})`
+      ).execute(connection);
+    }
+  });
+}
+
 /** A fresh schema with every migration applied, so test files can't see each other's rows. */
 export async function createTestDatabase(): Promise<TestDatabase> {
   if (testDatabaseUrl === null) throw new Error('No test database. Guard the suite with testDatabaseUrl.');
   const schema = `test_${randomBytes(6).toString('hex')}`;
   const db = createPgDb(testDatabaseUrl, { schema });
-  await migrateToLatest(db, { schema });
+  await withScratchSchemaLock(db, 'shared', () => migrateToLatest(db, { schema }));
   return {
     db,
     schema,
     destroy: async () => {
-      await sql`drop schema if exists ${sql.id(schema)} cascade`.execute(db);
+      await withScratchSchemaLock(db, 'exclusive', (connection) =>
+        sql`drop schema if exists ${sql.id(schema)} cascade`.execute(connection),
+      );
       await db.destroy();
     },
   };
