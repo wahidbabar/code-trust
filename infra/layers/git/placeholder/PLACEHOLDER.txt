@@ -1,0 +1,5 @@
+This is not the git layer and has no git in it.
+
+GitLayer (infra/lib/git-layer.ts) uses this directory in place of dist/git-layer.zip only when
+the CDK CLI is not bundling the layer's stack, or when `pnpm synth` runs without the zip. A
+deploy that bundles the stack needs the real layer: run `pnpm build:git-layer`.

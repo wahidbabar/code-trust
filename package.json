@@ -15,7 +15,7 @@
     "test": "vitest run",
     "verify": "pnpm typecheck && pnpm lint && pnpm test",
     "verify:changed": "node scripts/verify-changed.mjs",
-    "synth": "ALERT_EMAIL_PLACEHOLDER=1 pnpm --filter @code-trust/infra exec cdk synth --no-notices",
+    "synth": "ALERT_EMAIL_PLACEHOLDER=1 GIT_LAYER_PLACEHOLDER=1 pnpm --filter @code-trust/infra exec cdk synth --no-notices",
     "build:git-layer": "bash infra/layers/git/build.sh"
   },
   "devDependencies": {
