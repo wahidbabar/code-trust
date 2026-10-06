@@ -1,6 +1,6 @@
 # T08: Database access from Lambda (Neon dialect, bundle-safe entry, prune queries)
 
-Status: planned
+Status: in progress
 Wave: 2 (serial, before the worker and API-on-Lambda lanes)
 Depends on: T02
 Owner paths (edit only these):
