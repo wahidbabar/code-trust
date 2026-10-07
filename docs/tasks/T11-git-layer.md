@@ -1,6 +1,6 @@
 # T11: Git for the Lambda runtime (a layer built from Amazon Linux 2023 packages)
 
-Status: in progress
+Status: in review
 Wave: 2
 Depends on: T01
 Owner paths (edit only these):
