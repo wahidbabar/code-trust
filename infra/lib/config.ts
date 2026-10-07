@@ -42,3 +42,12 @@ export const EVENTS_MAX_RECEIVE_COUNT = 5;
 export const WEBHOOK_MEMORY_MB = 256;
 // Below GitHub's 10 second delivery timeout, so the function's own 500 reaches GitHub first.
 export const WEBHOOK_TIMEOUT_SECONDS = 8;
+
+// ApiStack (T10). The database URL is an SSM SecureString under the AWS-managed key, created by
+// hand; the worker's stack (T13) reads the same parameter.
+export const DATABASE_URL_PARAMETER_NAME = '/code-trust/database-url';
+// The dashboard is a GitHub Pages project site, and an origin has no path. The username is public.
+export const DASHBOARD_ORIGIN = 'https://wahidbabar.github.io';
+export const API_MEMORY_MB = 512;
+// A cold start (about 5 s for SSM at worst, under 1 s to boot) plus one Neon query at its 5 s timeout.
+export const API_TIMEOUT_SECONDS = 15;
