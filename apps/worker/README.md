@@ -18,7 +18,7 @@ A `backfill` always analyzes, so re-adding a repo refreshes it after an analyzer
 1. Empty the work root (`WORK_ROOT`, default `/tmp/work`). A timeout or an out-of-memory kill skips every `finally`, and Lambda keeps `/tmp` for the next invocation, so whatever a killed job left goes here.
 2. `git ls-remote --symref <url> HEAD` gives the default branch and its tip, with no GitHub API call. Public repos are read anonymously.
 3. For a `push`, read the stored repo. If its head is the remote tip, stop.
-4. `git clone --template= --single-branch --branch=<branch> --no-tags --no-checkout <url>` into a fresh directory under the work root. The clone has the branch's full history and nothing else: the analyzer refuses shallow and partial clones and reads only objects.
+4. `git clone --template= --single-branch --branch=<branch> --no-tags --no-checkout <url>` into a fresh directory under the work root. The clone has the branch's full history and nothing else: the analyzer refuses shallow and partial clones and reads only objects. The empty `--template` beats the `GIT_TEMPLATE_DIR` that the git layer's wrapper sets, so the clone has no hooks or `info/` files.
 5. `observedAt` is the time right after the clone. Analyze the clone's HEAD, never the job's `headSha`: a repo's jobs run in order, and analyzing the current tip is what keeps a late job from moving the head back.
 6. Write, in the order `packages/db/README.md` gives:
    1. `upsertRepo`

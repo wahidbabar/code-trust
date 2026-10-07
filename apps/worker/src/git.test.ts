@@ -1,4 +1,4 @@
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
 import { createServer, type RequestListener } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { join } from 'node:path';
@@ -8,6 +8,7 @@ import {
   cloneMainline,
   createGitRunner,
   GitCommandError,
+  type GitRunner,
   GitTimeoutError,
   githubCloneUrl,
   lsRemoteHead,
@@ -215,6 +216,25 @@ describe('cloneMainline', () => {
     // The empty template: no hooks, no info/ files, nothing the walker would refuse.
     expect(existsSync(join(dir, '.git', 'hooks'))).toBe(false);
     expect(existsSync(join(dir, '.git', 'info'))).toBe(false);
+  });
+
+  test("the clone takes no templates, even from GIT_TEMPLATE_DIR as the git layer's wrapper sets it", async () => {
+    const origin = TestRepo.create();
+    origin.commit({ files: { 'a.ts': 'a\n' } });
+    const templates = makeTempDir();
+    mkdirSync(join(templates, 'hooks'));
+    mkdirSync(join(templates, 'info'));
+    writeFileSync(join(templates, 'hooks', 'post-checkout'), '#!/bin/sh\n');
+    // An attributes file the analyzer would refuse the clone for.
+    writeFileSync(join(templates, 'info', 'attributes'), '* binary\n');
+    const layerGit: GitRunner = (args, options) =>
+      git(args, { ...options, env: { ...options.env, GIT_TEMPLATE_DIR: templates } });
+    const workRoot = makeTempDir();
+    const dir = join(workRoot, 'clone');
+
+    await cloneMainline(layerGit, { url: origin.url, branch: 'main', dir, workRoot });
+
+    expect(readdirSync(join(dir, '.git')).sort()).toEqual(['HEAD', 'config', 'logs', 'objects', 'packed-refs', 'refs']);
   });
 
   test('a clone that needs credentials is unavailable', async () => {
