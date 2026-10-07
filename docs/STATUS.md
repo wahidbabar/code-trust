@@ -11,7 +11,7 @@
 | T07 | Queue contracts: job messages, repo removal events | 2 (serial) | in review | T02 | [#9](https://github.com/wahidbabar/code-trust/pull/9) |
 | T08 | Database access from Lambda: Neon dialect, bundle-safe entry, prune queries | 2 (serial) | in review | T02 | [#10](https://github.com/wahidbabar/code-trust/pull/10) |
 | T09 | Worker job runner: clone, analyze, write; delete | 2 | in review | T07, T08 | [#12](https://github.com/wahidbabar/code-trust/pull/12) |
-| T10 | API on Lambda: handler, Neon, `ApiStack`, CORS | 2 | planned | T06, T08 | |
+| T10 | API on Lambda: handler, Neon, `ApiStack`, CORS | 2 | in progress | T06, T08 | |
 | T11 | Git for the Lambda runtime: layer from AL2023 packages | 2 | in review | T01 | [#11](https://github.com/wahidbabar/code-trust/pull/11) |
 | T12 | Dispatcher: events queue to the FIFO jobs queue | 2 | in review | T04, T07 | [#13](https://github.com/wahidbabar/code-trust/pull/13) |
 | T13 | `WorkerStack`: FIFO jobs queue, dispatcher and worker on Lambda | 2 | planned | T09, T10, T11, T12 | |
