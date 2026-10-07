@@ -1,6 +1,6 @@
 # T09: Worker job runner (clone, analyze, write; delete)
 
-Status: planned
+Status: in progress
 Wave: 2
 Depends on: T07, T08 (both merged to main before this starts)
 Owner paths (edit only these):
