@@ -6,6 +6,7 @@ import { randomUUID } from 'node:crypto';
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
+import type { GetParameterCommand } from '@aws-sdk/client-ssm';
 import { analyzeRepo, type RepoAnalysis } from '@code-trust/analyzer';
 import {
   type Database,
@@ -46,6 +47,7 @@ import {
   UpdateQueryNode,
 } from 'kysely';
 import { Pool } from 'pg';
+import type { SsmClientLike } from './aws.ts';
 import type { GitRunner, GitRunOptions, GitRunResult } from './git.ts';
 
 export interface Identity {
@@ -456,4 +458,21 @@ export function loggedDb(schema: string): { db: Db; events: LogEvent[]; destroy(
 export function statementOf(event: LogEvent): string {
   const sql = event.query.sql;
   return `${sql.slice(0, sql.indexOf(' '))} ${/"(\w+)"/.exec(sql)?.[1] ?? '?'}`;
+}
+
+/**
+ * An SSM client that answers every read with `value`, or fails with each error in `failures` first.
+ * `sent` records every command, so a test can count reads.
+ */
+export function fakeSsm(value: string | undefined, failures: Error[] = []) {
+  const sent: GetParameterCommand[] = [];
+  const client: SsmClientLike = {
+    send: async (command) => {
+      sent.push(command);
+      const failure = failures.shift();
+      if (failure) throw failure;
+      return { $metadata: {}, ...(value === undefined ? {} : { Parameter: { Value: value } }) };
+    },
+  };
+  return { client, sent };
 }
