@@ -80,6 +80,9 @@ importers:
 
   apps/worker:
     dependencies:
+      '@aws-sdk/client-ssm':
+        specifier: ^3.1145.0
+        version: 3.1145.0
       '@code-trust/analyzer':
         specifier: workspace:*
         version: link:../../packages/analyzer
@@ -89,6 +92,16 @@ importers:
       '@code-trust/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      kysely:
+        specifier: ^0.29.6
+        version: 0.29.6
+    devDependencies:
+      '@types/pg':
+        specifier: ^8.23.1
+        version: 8.23.1
+      pg:
+        specifier: ^8.23.1
+        version: 8.23.1
 
   infra:
     dependencies:
