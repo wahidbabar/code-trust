@@ -130,6 +130,9 @@ importers:
         specifier: ^10.8.1
         version: 10.8.1
     devDependencies:
+      '@code-trust/api':
+        specifier: workspace:*
+        version: link:../apps/api
       '@code-trust/ingest':
         specifier: workspace:*
         version: link:../apps/ingest
