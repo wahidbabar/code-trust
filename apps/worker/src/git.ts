@@ -189,8 +189,8 @@ export interface CloneOptions {
 /**
  * Clones the default branch's full history, and nothing else: no other branches, no tags, no
  * checkout (the analyzer reads objects only). The analyzer refuses shallow and partial clones, so
- * there is no --depth or --filter. An empty --template copies nothing, so no hooks or info/ files
- * exist and a git layer without a templates directory has nothing to warn about.
+ * there is no --depth or --filter. An empty --template beats the GIT_TEMPLATE_DIR the git layer's
+ * wrapper sets, so the clone has no hooks or info/ files whatever templates git carries.
  */
 export async function cloneMainline(git: GitRunner, options: CloneOptions): Promise<'cloned' | 'unavailable'> {
   const { url, branch, dir, workRoot, timeoutMs = CLONE_TIMEOUT_MS } = options;
