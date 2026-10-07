@@ -5,7 +5,8 @@
   "description": "NestJS REST API on Lambda.",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./env": "./src/env.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -16,8 +17,10 @@
     "seed": "node --experimental-strip-types --env-file-if-exists=../../.env.workspace src/seed.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-ssm": "^3.1145.0",
     "@code-trust/db": "workspace:*",
     "@code-trust/shared": "workspace:*",
+    "@codegenie/serverless-express": "^4.17.1",
     "@nestjs/common": "^12.1.2",
     "@nestjs/core": "^12.1.2",
     "@nestjs/platform-express": "^12.1.2",
@@ -26,7 +29,11 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@types/aws-lambda": "^8.10.164",
+    "@types/pg": "^8.23.1",
     "@types/supertest": "^7.2.1",
+    "kysely": "^0.29.6",
+    "pg": "^8.23.1",
     "supertest": "^7.3.1",
     "tsx": "^4.23.15"
   }
