@@ -8,7 +8,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",
     "format": "biome format --write .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "smoke:api": "node --experimental-strip-types scripts/smoke-api.ts"
   },
   "dependencies": {
     "aws-cdk-lib": "^2.272.0",
