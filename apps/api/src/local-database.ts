@@ -16,6 +16,12 @@ export function localDatabaseUrl(): string {
 
 /** Database and host only: the URL carries a password. */
 export function describeDatabase(url: string): string {
-  const target = new URL(url);
+  let target: URL;
+  try {
+    target = new URL(url);
+  } catch {
+    // Node's ERR_INVALID_URL keeps the whole URL on `input`, so it is dropped here, as in db's migrate.
+    throw new Error('DATABASE_URL is not a valid URL. Its value is not printed, since it holds a password.');
+  }
   return `${target.pathname.slice(1)} on ${target.host}`;
 }
