@@ -26,7 +26,9 @@
 | --- | --- | --- | --- |
 | CDKToolkit | ap-south-1 | 2026-10-02 | CDK bootstrap, created once by the human |
 | CodeTrustFoundation | ap-south-1 | 2026-10-02 | Budget alarm and data bucket from T01 |
-| CodeTrustIngest | ap-south-1 | 2026-10-03 | Webhook Lambda and events queue from T04 |
+| CodeTrustIngest | ap-south-1 | 2026-10-03 | Webhook Lambda and events queue from T04. Updated 2026-10-10 by the `CodeTrustWorker` deploy, which added the events queue ARN output |
+| CodeTrustApi | ap-south-1 | 2026-10-10 | Read API behind its Function URL from T10. `/health`, `/repos` (200) and the CORS check pass |
+| CodeTrustWorker | ap-south-1 | 2026-10-10 | FIFO jobs queue, dispatcher and worker with the git layer from T13, with no concurrency caps. The 18 events queued since 2026-10-03 drained into 2 analyses and 16 skips, with both DLQs empty |
 
 ## Waves
 
