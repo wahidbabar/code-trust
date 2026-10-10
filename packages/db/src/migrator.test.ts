@@ -1,7 +1,7 @@
 import { sql } from 'kysely';
 import { afterAll, beforeAll, describe, expect, test } from 'vitest';
 import { loadMigrations, migrateToLatest } from './migrator.ts';
-import { createTestDatabase, type TestDatabase, testDatabaseUrl } from './testing.ts';
+import { createTestDatabase, type TestDatabase, testDatabaseUrl, withScratchSchemaLock } from './testing.ts';
 
 test('migration files are named NNNN_snake_case, so file-name order is apply order', async () => {
   const names = Object.keys(await loadMigrations());
@@ -42,7 +42,11 @@ describe.skipIf(testDatabaseUrl === null)('migrateToLatest', () => {
 
   test('a second run applies nothing and changes nothing', async () => {
     const before = await catalog();
-    const second = await migrateToLatest(scratch.db, { schema: scratch.schema });
+    // Shared, as createTestDatabase holds it: the Migrator reads every schema, and another file may
+    // be dropping its own.
+    const second = await withScratchSchemaLock(scratch.db, 'shared', () =>
+      migrateToLatest(scratch.db, { schema: scratch.schema }),
+    );
     expect(second.applied).toEqual([]);
     expect(await catalog()).toEqual(before);
   });
