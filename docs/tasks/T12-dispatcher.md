@@ -1,12 +1,13 @@
 # T12: Dispatcher (events queue to the per-repo FIFO jobs queue)
 
-Status: planned
+Status: in progress
 Wave: 2
 Depends on: T04, T07 (merged to main before this starts)
 Owner paths (edit only these):
 - `apps/ingest/src/dispatcher.ts`, `apps/ingest/src/dispatcher.test.ts`, `apps/ingest/src/dispatcher-lambda.ts`, `apps/ingest/src/dispatcher-lambda.test.ts` (new)
 - `apps/ingest/src/aws.ts`, `apps/ingest/src/aws.test.ts`, `apps/ingest/src/env.ts` (additions only; the webhook's code and tests keep working unchanged)
 - `apps/ingest/src/index.ts` (new exports only)
+- `apps/ingest/README.md` (a Dispatcher section only; T14 edits it after this lane merges)
 - docs/architecture.md (your rows in Decisions)
 Read first:
 - docs/architecture.md (Flow, and the Decisions rows on per-repo ordering, the events queue's retention and visibility, and esbuild bundles)
