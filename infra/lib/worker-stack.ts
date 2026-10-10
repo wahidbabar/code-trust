@@ -9,14 +9,12 @@ import { LogGroup, RetentionDays } from 'aws-cdk-lib/aws-logs';
 import { type IQueue, Queue, QueueEncryption } from 'aws-cdk-lib/aws-sqs';
 import type { Construct } from 'constructs';
 import {
-  DISPATCHER_MAX_CONCURRENCY,
   DISPATCHER_MEMORY_MB,
   DISPATCHER_TIMEOUT_SECONDS,
   JOBS_MAX_RECEIVE_COUNT,
   JOBS_VISIBILITY_TIMEOUT_SECONDS,
   QUEUE_RETENTION_DAYS,
   WORKER_EPHEMERAL_STORAGE_MB,
-  WORKER_MAX_CONCURRENCY,
   WORKER_MEMORY_MB,
   WORKER_TIMEOUT_SECONDS,
 } from './config.ts';
@@ -159,20 +157,18 @@ export class WorkerStack extends Stack {
 
     // Mappings rather than SqsEventSource, which would grant consume rights on its own. A FIFO
     // queue's poller takes one message group at a time, which keeps a repo's jobs in order, and a
-    // batch of 1 means a failed job holds back only its own repo. maxConcurrency caps the pollers
-    // (see config.ts); it also keeps Lambda from scaling them down while the queues are idle, so
-    // each mapping keeps making empty receives, a cost the Decisions row records.
+    // batch of 1 means a failed job holds back only its own repo. No maxConcurrency: a cap stops
+    // Lambda from scaling idle pollers down, and their empty receives would outgrow SQS's free
+    // tier. The worker still runs at most one execution per repo with jobs waiting.
     worker.addEventSourceMapping('JobsQueueMapping', {
       eventSourceArn: jobsQueue.queueArn,
       batchSize: 1,
       reportBatchItemFailures: true,
-      maxConcurrency: WORKER_MAX_CONCURRENCY,
     });
     dispatcher.addEventSourceMapping('EventsQueueMapping', {
       eventSourceArn: props.eventsQueue.queueArn,
       batchSize: 10,
       reportBatchItemFailures: true,
-      maxConcurrency: DISPATCHER_MAX_CONCURRENCY,
     });
 
     new CfnOutput(this, 'JobsQueueUrl', {
