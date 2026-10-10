@@ -1,6 +1,6 @@
 # T12: Dispatcher (events queue to the per-repo FIFO jobs queue)
 
-Status: in review
+Status: done
 Wave: 2
 Depends on: T04, T07 (merged to main before this starts)
 Owner paths (edit only these):

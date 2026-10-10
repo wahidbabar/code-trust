@@ -8,12 +8,12 @@
 | T04 | Ingest: GitHub webhook to SQS, IngestStack | 1 | done | T01, T02 | [#4](https://github.com/wahidbabar/code-trust/pull/4) |
 | T05 | Analyzer: attribution, survival estimator, `analyzeRepo` | 1 | done | T03 | [#7](https://github.com/wahidbabar/code-trust/pull/7) |
 | T06 | API read path (NestJS REST, local server) | 1 | done | T02 | [#6](https://github.com/wahidbabar/code-trust/pull/6) |
-| T07 | Queue contracts: job messages, repo removal events | 2 (serial) | in review | T02 | [#9](https://github.com/wahidbabar/code-trust/pull/9) |
-| T08 | Database access from Lambda: Neon dialect, bundle-safe entry, prune queries | 2 (serial) | in review | T02 | [#10](https://github.com/wahidbabar/code-trust/pull/10) |
-| T09 | Worker job runner: clone, analyze, write; delete | 2 | in review | T07, T08 | [#12](https://github.com/wahidbabar/code-trust/pull/12) |
-| T10 | API on Lambda: handler, Neon, `ApiStack`, CORS | 2 | in review | T06, T08 | [#14](https://github.com/wahidbabar/code-trust/pull/14) |
-| T11 | Git for the Lambda runtime: layer from AL2023 packages | 2 | in review | T01 | [#11](https://github.com/wahidbabar/code-trust/pull/11) |
-| T12 | Dispatcher: events queue to the FIFO jobs queue | 2 | in review | T04, T07 | [#13](https://github.com/wahidbabar/code-trust/pull/13) |
+| T07 | Queue contracts: job messages, repo removal events | 2 (serial) | done | T02 | [#9](https://github.com/wahidbabar/code-trust/pull/9) |
+| T08 | Database access from Lambda: Neon dialect, bundle-safe entry, prune queries | 2 (serial) | done | T02 | [#10](https://github.com/wahidbabar/code-trust/pull/10) |
+| T09 | Worker job runner: clone, analyze, write; delete | 2 | done | T07, T08 | [#12](https://github.com/wahidbabar/code-trust/pull/12) |
+| T10 | API on Lambda: handler, Neon, `ApiStack`, CORS | 2 | done | T06, T08 | [#14](https://github.com/wahidbabar/code-trust/pull/14) |
+| T11 | Git for the Lambda runtime: layer from AL2023 packages | 2 | done | T01 | [#11](https://github.com/wahidbabar/code-trust/pull/11) |
+| T12 | Dispatcher: events queue to the FIFO jobs queue | 2 | done | T04, T07 | [#13](https://github.com/wahidbabar/code-trust/pull/13) |
 | T13 | `WorkerStack`: FIFO jobs queue, dispatcher and worker on Lambda | 2 | done | T09, T10, T11, T12 | [#16](https://github.com/wahidbabar/code-trust/pull/16) |
 | T14 | Repo removal events: private, deleted, uninstalled | 2 | planned | T04, T07 | |
 | T15 | Dashboard on GitHub Pages | 2 | planned | T06 | |
@@ -26,8 +26,7 @@
 | --- | --- | --- | --- |
 | CDKToolkit | ap-south-1 | 2026-10-02 | CDK bootstrap, created once by the human |
 | CodeTrustFoundation | ap-south-1 | 2026-10-02 | Budget alarm and data bucket from T01 |
-| CodeTrustIngest | ap-south-1 | 2026-10-03 | Webhook Lambda and events queue from T04. Updated 2026-10-10 by the `CodeTrustWorker` deploy, which added the events queue ARN output |
-| CodeTrustWorker | ap-south-1 | 2026-10-10 | FIFO jobs queue, dispatcher and worker with the git layer from T13 |
+| CodeTrustIngest | ap-south-1 | 2026-10-03 | Webhook Lambda and events queue from T04 |
 
 ## Waves
 

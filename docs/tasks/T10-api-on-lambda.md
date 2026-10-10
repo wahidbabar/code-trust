@@ -1,6 +1,6 @@
 # T10: API on Lambda (handler, Neon, ApiStack, CORS for the dashboard)
 
-Status: in review
+Status: done
 Wave: 2
 Depends on: T06, T08 (merged to main before this starts)
 Owner paths (edit only these):
