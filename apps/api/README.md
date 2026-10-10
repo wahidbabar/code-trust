@@ -50,7 +50,7 @@ Nothing here emits decorator metadata. `emitDecoratorMetadata` is off, esbuild (
 
 1. Check what this stack reads: the SecureString `/code-trust/database-url` exists in `ap-south-1` under the AWS-managed key, and Neon is migrated, with `smoke:neon` passed as in `packages/db/README.md`.
 
-2. Deploy only this stack. `-e` (`--exclusively`) bundles and deploys `CodeTrustApi` alone. It needs no other stack, and so it never needs the git layer zip, which the CLI would otherwise want for every stack. The CDK app still builds every stack, so `ALERT_EMAIL` is required.
+2. Deploy only this stack. `-e` (`--exclusively`) bundles and deploys `CodeTrustApi` alone. It needs no other stack, and so it never needs the git layer zip: without `-e` the CLI bundles every stack, including the worker's once it exists. The CDK app still builds every stack, so `ALERT_EMAIL` is required.
 
    ```bash
    export ALERT_EMAIL=you@example.com
