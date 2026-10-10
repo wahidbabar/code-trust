@@ -85,9 +85,10 @@ It runs one `backfill` job against the workspace database (`DATABASE_URL`, or th
 
 `WorkerStack` (`CodeTrustWorker` in `infra`) holds the FIFO jobs queue and its DLQ, the dispatcher reading `CodeTrustIngest`'s events queue, and this worker with git from the layer. The moment it exists, both mappings start draining: every event queued since the webhook went live becomes a job.
 
-1. Check the account's limits first.
+1. Sign in, then check the account's limits first.
 
    ```bash
+   aws login
    aws lambda get-account-settings --region ap-south-1 --query AccountLimit
    ```
 
@@ -102,10 +103,9 @@ It runs one `backfill` job against the workspace database (`DATABASE_URL`, or th
 
    It must print `SecureString` and `alias/aws/ssm`. It prints the name and type only, never the value.
 
-3. Sign in, then build the git layer. The build checks the layer's libraries against the current runtime image, so pull that first. `infra/layers/git/README.md` has the details and the layer's own smoke test.
+3. Build the git layer. The build checks the layer's libraries against the current runtime image, so pull that first. `infra/layers/git/README.md` has the details and the layer's own smoke test.
 
    ```bash
-   aws login
    docker pull public.ecr.aws/lambda/nodejs:24
    pnpm build:git-layer
    ```
