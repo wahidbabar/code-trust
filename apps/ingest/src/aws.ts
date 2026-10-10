@@ -1,8 +1,10 @@
-// The two AWS calls the webhook makes, behind the injected interfaces of webhook.ts.
+// The AWS calls the webhook and the dispatcher make, behind the injected interfaces of webhook.ts
+// and dispatcher.ts.
 
 import { SendMessageBatchCommand, type SendMessageBatchCommandOutput, type SQSClientConfig } from '@aws-sdk/client-sqs';
 import { GetParameterCommand, type GetParameterCommandOutput, type SSMClientConfig } from '@aws-sdk/client-ssm';
-import { WEBHOOK_ENV } from './env.ts';
+import type { SendFifoBatch } from './dispatcher.ts';
+import { DISPATCHER_ENV, WEBHOOK_ENV } from './env.ts';
 import type { SendBatch } from './webhook.ts';
 
 /**
@@ -11,7 +13,8 @@ import type { SendBatch } from './webhook.ts';
  * these, a hung call fails in about 5 seconds and becomes the handler's own 500, inside the
  * function's 8 second timeout and GitHub's 10. throwOnRequestTimeout is required: since
  * @smithy/node-http-handler 4.4.0 a request timeout alone only logs a warning, and older
- * handlers ignore the flag and abort anyway.
+ * handlers ignore the flag and abort anyway. The dispatcher's SQS client uses the same bounds,
+ * which keep it well inside the events queue's 30 second visibility timeout.
  */
 export const AWS_CLIENT_CONFIG = {
   maxAttempts: 2,
@@ -60,5 +63,34 @@ export function sqsBatchSender(client: SqsClientLike, queueUrl: string | undefin
     );
     // A partial failure comes back in Failed on a successful response, not as an error.
     return { failedCount: output.Failed?.length ?? 0 };
+  };
+}
+
+/**
+ * Sends one batch to the FIFO jobs queue. An entry counts as sent only when SQS lists it in
+ * Successful. One it lists nowhere is failed too: a retry is deduplicated, while a job wrongly
+ * taken as sent is lost.
+ */
+export function sqsFifoBatchSender(client: SqsClientLike, queueUrl: string | undefined): SendFifoBatch {
+  return async (entries) => {
+    if (!queueUrl) throw new MissingConfigError(`${DISPATCHER_ENV.jobsQueueUrl} is not set`);
+    const output = await client.send(
+      new SendMessageBatchCommand({
+        QueueUrl: queueUrl,
+        Entries: entries.map((entry) => ({
+          Id: entry.id,
+          MessageBody: entry.body,
+          MessageGroupId: entry.groupId,
+          MessageDeduplicationId: entry.deduplicationId,
+        })),
+      }),
+    );
+    const sent = new Set(output.Successful?.map((entry) => entry.Id));
+    const codes = new Map(output.Failed?.map((entry) => [entry.Id, entry.Code]));
+    return {
+      failed: entries
+        .filter((entry) => !sent.has(entry.id))
+        .map((entry) => ({ id: entry.id, code: codes.get(entry.id) ?? 'NotAcknowledged' })),
+    };
   };
 }

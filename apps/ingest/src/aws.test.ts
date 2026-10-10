@@ -1,7 +1,15 @@
 import type { SendMessageBatchCommand } from '@aws-sdk/client-sqs';
 import type { GetParameterCommand } from '@aws-sdk/client-ssm';
 import { describe, expect, test } from 'vitest';
-import { AWS_CLIENT_CONFIG, type SqsClientLike, type SsmClientLike, sqsBatchSender, ssmSecretLoader } from './aws.ts';
+import {
+  AWS_CLIENT_CONFIG,
+  type SqsClientLike,
+  type SsmClientLike,
+  sqsBatchSender,
+  sqsFifoBatchSender,
+  ssmSecretLoader,
+} from './aws.ts';
+import type { FifoBatchEntry } from './dispatcher.ts';
 
 const QUEUE_URL = 'https://sqs.ap-south-1.amazonaws.com/account/events';
 
@@ -92,6 +100,85 @@ describe('sqsBatchSender', () => {
     const sqs = fakeSqs();
     await expect(sqsBatchSender(sqs.client, undefined)([{ id: 'm0', body: '{}' }])).rejects.toThrow(
       /EVENTS_QUEUE_URL is not set/,
+    );
+    expect(sqs.sent).toEqual([]);
+  });
+});
+
+const JOBS_QUEUE_URL = 'https://sqs.ap-south-1.amazonaws.com/account/jobs.fifo';
+
+/** A FIFO batch response: `failed` maps an entry id to its code, and `missing` ids are in neither list. */
+function fakeFifoSqs(failed: Readonly<Record<string, string>> = {}, missing: readonly string[] = []) {
+  const sent: SendMessageBatchCommand[] = [];
+  const client: SqsClientLike = {
+    send: async (command) => {
+      sent.push(command);
+      const ids = (command.input.Entries ?? []).map((entry) => entry.Id ?? '');
+      return {
+        $metadata: {},
+        Successful: ids
+          .filter((Id) => !(Id in failed) && !missing.includes(Id))
+          .map((Id) => ({ Id, MessageId: `msg-${Id}`, MD5OfMessageBody: '' })),
+        Failed: Object.entries(failed).map(([Id, Code]) => ({ Id, Code, SenderFault: false })),
+      };
+    },
+  };
+  return { client, sent };
+}
+
+const fifoEntry = (id: string, repoId: number): FifoBatchEntry => ({
+  id,
+  body: `{"repo":${repoId}}`,
+  groupId: String(repoId),
+  deduplicationId: `72d3162e-cc78-11e3-81ab-4c9367dc0958:${repoId}`,
+});
+
+describe('sqsFifoBatchSender', () => {
+  test('passes MessageGroupId and MessageDeduplicationId for every entry, and reports no failures', async () => {
+    const sqs = fakeFifoSqs();
+    const result = await sqsFifoBatchSender(sqs.client, JOBS_QUEUE_URL)([fifoEntry('m0', 1001), fifoEntry('m1', 1002)]);
+    expect(result).toEqual({ failed: [] });
+    expect(sqs.sent.map((command) => command.input)).toEqual([
+      {
+        QueueUrl: JOBS_QUEUE_URL,
+        Entries: [
+          {
+            Id: 'm0',
+            MessageBody: '{"repo":1001}',
+            MessageGroupId: '1001',
+            MessageDeduplicationId: '72d3162e-cc78-11e3-81ab-4c9367dc0958:1001',
+          },
+          {
+            Id: 'm1',
+            MessageBody: '{"repo":1002}',
+            MessageGroupId: '1002',
+            MessageDeduplicationId: '72d3162e-cc78-11e3-81ab-4c9367dc0958:1002',
+          },
+        ],
+      },
+    ]);
+  });
+
+  test('returns which entries failed, by id, with the code SQS gave', async () => {
+    const sqs = fakeFifoSqs({ m1: 'InternalError' });
+    const send = sqsFifoBatchSender(sqs.client, JOBS_QUEUE_URL);
+    expect(await send([fifoEntry('m0', 1001), fifoEntry('m1', 1002), fifoEntry('m2', 1003)])).toEqual({
+      failed: [{ id: 'm1', code: 'InternalError' }],
+    });
+  });
+
+  test('an entry missing from Successful is failed even when Failed does not list it', async () => {
+    const sqs = fakeFifoSqs({}, ['m0']);
+    const send = sqsFifoBatchSender(sqs.client, JOBS_QUEUE_URL);
+    expect(await send([fifoEntry('m0', 1001), fifoEntry('m1', 1002)])).toEqual({
+      failed: [{ id: 'm0', code: 'NotAcknowledged' }],
+    });
+  });
+
+  test('a missing queue URL fails when it sends, not when it is built', async () => {
+    const sqs = fakeFifoSqs();
+    await expect(sqsFifoBatchSender(sqs.client, undefined)([fifoEntry('m0', 1001)])).rejects.toThrow(
+      /JOBS_QUEUE_URL is not set/,
     );
     expect(sqs.sent).toEqual([]);
   });
