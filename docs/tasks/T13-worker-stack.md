@@ -1,6 +1,6 @@
 # T13: WorkerStack (FIFO jobs queue, dispatcher and worker on Lambda)
 
-Status: planned
+Status: in progress
 Wave: 2
 Depends on: T09, T10, T11, T12 (all merged to main before this starts)
 Owner paths (edit only these):
