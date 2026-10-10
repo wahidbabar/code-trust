@@ -13,7 +13,7 @@
 | T09 | Worker job runner: clone, analyze, write; delete | 2 | in review | T07, T08 | [#12](https://github.com/wahidbabar/code-trust/pull/12) |
 | T10 | API on Lambda: handler, Neon, `ApiStack`, CORS | 2 | planned | T06, T08 | |
 | T11 | Git for the Lambda runtime: layer from AL2023 packages | 2 | in review | T01 | [#11](https://github.com/wahidbabar/code-trust/pull/11) |
-| T12 | Dispatcher: events queue to the FIFO jobs queue | 2 | in review | T04, T07 | |
+| T12 | Dispatcher: events queue to the FIFO jobs queue | 2 | in review | T04, T07 | [#13](https://github.com/wahidbabar/code-trust/pull/13) |
 | T13 | `WorkerStack`: FIFO jobs queue, dispatcher and worker on Lambda | 2 | planned | T09, T10, T11, T12 | |
 | T14 | Repo removal events: private, deleted, uninstalled | 2 | planned | T04, T07 | |
 | T15 | Dashboard on GitHub Pages | 2 | planned | T06 | |
