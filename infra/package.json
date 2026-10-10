@@ -9,7 +9,8 @@
     "lint": "biome check .",
     "format": "biome format --write .",
     "test": "vitest run",
-    "smoke:api": "node --experimental-strip-types scripts/smoke-api.ts"
+    "smoke:api": "node --experimental-strip-types scripts/smoke-api.ts",
+    "smoke:worker": "node --experimental-strip-types scripts/smoke-worker.ts"
   },
   "dependencies": {
     "aws-cdk-lib": "^2.272.0",
@@ -18,6 +19,7 @@
   "devDependencies": {
     "@code-trust/api": "workspace:*",
     "@code-trust/ingest": "workspace:*",
+    "@code-trust/worker": "workspace:*",
     "aws-cdk": "^2.1143.0",
     "tsx": "^4.23.15"
   }

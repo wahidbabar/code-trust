@@ -136,6 +136,9 @@ importers:
       '@code-trust/ingest':
         specifier: workspace:*
         version: link:../apps/ingest
+      '@code-trust/worker':
+        specifier: workspace:*
+        version: link:../apps/worker
       aws-cdk:
         specifier: ^2.1143.0
         version: 2.1143.0
