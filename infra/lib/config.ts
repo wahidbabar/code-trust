@@ -71,9 +71,3 @@ export const DISPATCHER_MEMORY_MB = 256;
 // Well under the events queue's 30 second visibility timeout. One batch of 10 is one SendMessageBatch,
 // at most two attempts of 2.5 seconds each under the ingest SDK client's timeouts.
 export const DISPATCHER_TIMEOUT_SECONDS = 10;
-// A cap on each event source's pollers, not reserved concurrency, so it cannot fail a deploy on a
-// low account limit. A new account can start with 10 concurrent executions shared by all four
-// functions, and the webhook and the API need the rest: a throttled webhook loses deliveries,
-// because GitHub does not retry a failed one. 2 is the lowest value SQS event sources accept.
-export const WORKER_MAX_CONCURRENCY = 2;
-export const DISPATCHER_MAX_CONCURRENCY = 2;

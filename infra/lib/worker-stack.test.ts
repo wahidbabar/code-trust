@@ -6,12 +6,10 @@ import { Match, Template } from 'aws-cdk-lib/assertions';
 import { describe, expect, test } from 'vitest';
 import {
   DATABASE_URL_PARAMETER_NAME,
-  DISPATCHER_MAX_CONCURRENCY,
   DISPATCHER_TIMEOUT_SECONDS,
   REGION,
   WEBHOOK_SECRET_PARAMETER_NAME,
   WORKER_EPHEMERAL_STORAGE_MB,
-  WORKER_MAX_CONCURRENCY,
   WORKER_MEMORY_MB,
 } from './config.ts';
 import { IngestStack } from './ingest-stack.ts';
@@ -242,28 +240,27 @@ describe('WorkerStack', () => {
     }
   });
 
-  test('the worker reads the jobs queue one job at a time, the dispatcher the events queue 10 at a time, both capped at 2', () => {
+  test('the worker reads the jobs queue one job at a time, the dispatcher the events queue 10 at a time, neither capped', () => {
     const mappings = resourcesOf(template, 'AWS::Lambda::EventSourceMapping').map(([, m]) => m.Properties);
     expect(mappings).toHaveLength(2);
     const mappingOf = (functionId: string) =>
       mappings.find((m) => JSON.stringify(m.FunctionName) === JSON.stringify({ Ref: functionId }));
 
-    // Exactly these keys, with the cap written out: no batching window, filter or other setting.
+    // Exactly these keys: no batching window, filter or other setting, and no ScalingConfig, whose
+    // MaximumConcurrency would stop Lambda from scaling idle pollers down.
     expect(mappingOf(workerId)).toEqual({
       FunctionName: { Ref: workerId },
       EventSourceArn: arnOf(JOBS_QUEUE_ID),
       BatchSize: 1,
       FunctionResponseTypes: ['ReportBatchItemFailures'],
-      ScalingConfig: { MaximumConcurrency: 2 },
     });
     expect(mappingOf(dispatcherId)).toEqual({
       FunctionName: { Ref: dispatcherId },
       EventSourceArn: eventsQueueArn,
       BatchSize: 10,
       FunctionResponseTypes: ['ReportBatchItemFailures'],
-      ScalingConfig: { MaximumConcurrency: 2 },
     });
-    expect([WORKER_MAX_CONCURRENCY, DISPATCHER_MAX_CONCURRENCY]).toEqual([2, 2]);
+    for (const mapping of mappings) expect(mapping.ScalingConfig).toBeUndefined();
   });
 
   test('the events queue crosses stacks as a weak reference: a stack output, never an export', () => {

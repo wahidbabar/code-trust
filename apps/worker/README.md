@@ -92,7 +92,7 @@ It runs one `backfill` job against the workspace database (`DATABASE_URL`, or th
    aws lambda get-account-settings --region ap-south-1 --query AccountLimit
    ```
 
-   If `ConcurrentExecutions` is below 1000, request 1000 for "Concurrent executions" (AWS Lambda) in Service Quotas, in `ap-south-1`. Until AWS raises it, keep every function's memory at or below 3008 MB, the new-account cap: the worker uses 2048 MB. The two mappings take at most 2 executions each, so they fit even under a limit of 10, and they leave the rest to the webhook and the API. A throttled webhook loses deliveries, because GitHub does not retry a failed one.
+   If `ConcurrentExecutions` is below 1000, request 1000 for "Concurrent executions" (AWS Lambda) in Service Quotas, in `ap-south-1`. Until AWS raises it, keep every function's memory at or below 3008 MB, the new-account cap: the worker uses 2048 MB. Neither mapping caps its concurrency: the worker runs one execution for each repo with jobs waiting, and the dispatcher scales with the events backlog. A limit of 400 leaves the webhook and the API plenty of room. On a limit as low as 10, wait for the increase before deploying: the drain could take every execution, and a throttled webhook loses deliveries, because GitHub does not retry a failed one.
 
 2. Check what the worker reads, before anything else, because the jobs start running at once. The SecureString `/code-trust/database-url` must exist in `ap-south-1` under the AWS-managed key, and `smoke:neon` must have passed as in `packages/db/README.md`. Without them every job fails, holds its repo for 90 minutes, and after three tries lands in the jobs DLQ.
 
@@ -101,7 +101,7 @@ It runs one `backfill` job against the workspace database (`DATABASE_URL`, or th
      --parameter-filters Key=Name,Values=/code-trust/database-url --query 'Parameters[0].[Type,KeyId]'
    ```
 
-   It must print `SecureString` and `alias/aws/ssm`. It prints the name and type only, never the value.
+   It must print `SecureString` and `alias/aws/ssm`. It prints the type and key ID only, never the value.
 
 3. Build the git layer. The build checks the layer's libraries against the current runtime image, so pull that first. `infra/layers/git/README.md` has the details and the layer's own smoke test.
 
@@ -134,7 +134,7 @@ It runs one `backfill` job against the workspace database (`DATABASE_URL`, or th
      --queue-name-prefix CodeTrustIngest-EventsDeadLetterQueue --query 'QueueUrls[0]' --output text)
    ```
 
-6. Watch the queued events drain. The dispatcher takes 10 events at a time, at most two batches at once, so the events queue empties within a minute or two and the jobs queue fills. The worker then runs at most two jobs at once, and one repo's jobs one at a time, in order. For each repo the first `push` job analyzes and the later ones find the head stored and skip; a `backfill` always analyzes. Events older than 14 days have expired: removing a repo from the App's installation and adding it back enqueues a `backfill` for it.
+6. Watch the queued events drain. The dispatcher takes 10 events at a time and scales with the backlog, so the events queue empties within a minute or two and the jobs queue fills. The worker then runs each repo's jobs one at a time, in order, and as many repos at once as have jobs waiting, each one a writer on Neon's 0.25 CU. For each repo the first `push` job analyzes and the later ones find the head stored and skip; a `backfill` always analyzes. Events older than 14 days have expired: removing a repo from the App's installation and adding it back enqueues a `backfill` for it.
 
    ```bash
    for url in "$EVENTS_QUEUE_URL" "$JOBS_QUEUE_URL"; do
@@ -171,7 +171,7 @@ It runs one `backfill` job against the workspace database (`DATABASE_URL`, or th
    curl -s "${API_URL%/}/repos/$REPO_ID/survival-curve"
    ```
 
-9. A day after the deploy, count the empty receives. Setting `maxConcurrency` turns off the poller scale-down Lambda applies to idle SQS mappings, so each mapping keeps receiving while its queue is empty. Expect about 22,000 a day per queue, about 1.3 million a month for the two, against SQS's 1 million free requests a month: about $0.15 a month. This is the one part of the pipeline that bills while idle. A count far above that means more pollers than the cap allows for.
+9. A day after the deploy, count the empty receives. Neither mapping sets `maxConcurrency`, so Lambda scales an idle mapping's pollers down. Every SQS request, these and the real sends, receives and deletes, shares the 1 million free requests a month, about 33,000 a day. If the two queues' empty receives together come near that, the pollers are not scaling down: look into it before anything else changes.
 
    ```bash
    for url in "$EVENTS_QUEUE_URL" "$JOBS_QUEUE_URL"; do
