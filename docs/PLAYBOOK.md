@@ -56,6 +56,15 @@ Run these on the Mac, in Terminal.
 7. If GitHub says the PR has conflicts because another lane merged first, send in that lane's workspace: `Rebase on main and push.` CLAUDE.md has the steps. The guard lets an agent rewrite only its own branch, and only with `--force-with-lease`.
 8. If a lane goes sideways, press Esc twice to rewind, or archive it and start fresh with a sharper task file. A clean context with a better prompt beats a long session full of corrections.
 
+### In the Claude desktop app
+
+The same loop runs in the Code tab of the Claude desktop app, with these differences:
+
+1. Open `~/grind/code-trust` as the project. For each lane, start a new session (Cmd+N) and tick **worktree** next to the branch name. The worktree branches from `origin/main` and lives under `.claude/worktrees/`, which git ignores.
+2. The SessionStart hook does what Conductor's setup did: when `node_modules` or `.env.workspace` is missing it runs `scripts/conductor/setup.sh`, and it sets `$CONDUCTOR_PORT` for the session. Its first message in the session names the port block and the database. `.worktreeinclude` copies `.env` into new worktrees.
+3. Hook commands start from `$CLAUDE_PROJECT_DIR`, which can be the main checkout, so after a harness change merges, `git pull` in `~/grind/code-trust` to keep it on an up-to-date `main`.
+4. Review the diff in the diff view, then `/ship-lane`. Turn on **Auto-archive after PR merge or close** in Settings, Claude Code, to remove merged worktrees. Archiving there doesn't drop the worktree's database: before archiving, run `bash scripts/conductor/archive.sh` in the session's terminal, or clean up now and then with `docker exec code-trust-pg psql -U postgres -c '\l'` and `dropdb`.
+
 ## Phases
 
 1. **Wave 0, serial:** T01 foundation, then T02 contracts. One workspace at a time, because everything after depends on them.

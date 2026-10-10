@@ -34,5 +34,6 @@ pnpm-debug.log*
 .context/
 .claude/settings.local.json
 .claude/.cache/
+.claude/worktrees/
 .env.workspace
 *.pem

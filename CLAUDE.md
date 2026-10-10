@@ -12,9 +12,9 @@ A GitHub App that measures how long AI-attributed code survives in real reposito
 
 ## Environment
 
-- You usually run in a Conductor workspace: a git worktree on its own branch, with other agents working in sibling worktrees at the same time.
-- Dev servers bind to `$CONDUCTOR_PORT`. This workspace owns `$CONDUCTOR_PORT` through `$CONDUCTOR_PORT+9`.
-- This workspace's local Postgres URL is in `.env.workspace`. Conductor setup creates the database in the `code-trust-pg` container.
+- You usually run in a git worktree on its own branch, with other agents working in sibling worktrees at the same time: a worktree session in the Claude desktop app, or a Conductor workspace.
+- Dev servers bind to `$CONDUCTOR_PORT`. This workspace owns `$CONDUCTOR_PORT` through `$CONDUCTOR_PORT+9`. Conductor sets it; in a desktop worktree session the SessionStart hook does.
+- This workspace's local Postgres URL is in `.env.workspace`. `scripts/conductor/setup.sh` creates the database in the `code-trust-pg` container: Conductor runs it, and so does the SessionStart hook when the database or `node_modules` is missing.
 
 ## Hard rules (hooks in .claude/hooks enforce most of these)
 

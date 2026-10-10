@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# Conductor setup: runs once when a workspace is created. Safe to re-run.
+# Workspace setup: Conductor runs it when a workspace is created, and the SessionStart hook runs it
+# for a Claude desktop worktree session that lacks dependencies or a database. Safe to re-run.
+# Outside Conductor the database is named after the worktree's folder.
 set -euo pipefail
 cd "${CONDUCTOR_WORKSPACE_PATH:-$(pwd)}"
 
@@ -31,7 +33,7 @@ if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
   # Reuse the database this workspace already has, so renaming a workspace never orphans one.
   db="$(sed -n 's#^DATABASE_URL=postgres://[^/]*/\(ct_[a-z0-9_]*\)$#\1#p' .env.workspace 2>/dev/null | head -n 1 || true)"
   if [ -z "${db}" ]; then
-    db="ct_$(printf '%s' "${CONDUCTOR_WORKSPACE_NAME:-local}" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9' '_')"
+    db="ct_$(printf '%s' "${CONDUCTOR_WORKSPACE_NAME:-$(basename "$PWD")}" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9' '_')"
   fi
   if ! docker exec code-trust-pg psql -U postgres -tAc "SELECT 1 FROM pg_database WHERE datname = '${db}'" | grep -x 1 >/dev/null; then
     docker exec code-trust-pg createdb -U postgres "${db}"
