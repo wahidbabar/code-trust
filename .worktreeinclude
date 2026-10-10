@@ -1,0 +1,3 @@
+# Gitignored files the Claude desktop app copies into each new worktree, as Conductor's
+# file_include_globs does. .env.workspace is not one: each worktree gets its own database.
+.env

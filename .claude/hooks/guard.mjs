@@ -7,7 +7,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { isAbsolute, join, relative } from 'node:path';
 
 const input = readInput();
-const root = process.env.CLAUDE_PROJECT_DIR || input.cwd || process.cwd();
+const root = repoRoot(input.cwd) || process.env.CLAUDE_PROJECT_DIR || process.cwd();
 const tool = input.tool_name;
 const args = input.tool_input ?? {};
 
@@ -121,6 +121,21 @@ function overrideExists(name) {
 function currentBranch() {
   try {
     return execFileSync('git', ['branch', '--show-current'], { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+  } catch {
+    return '';
+  }
+}
+
+// The checkout this session works in. A session that runs in a worktree can have
+// CLAUDE_PROJECT_DIR naming the main checkout, so the git top level of the hook's cwd comes first.
+function repoRoot(cwd) {
+  if (!cwd) return '';
+  try {
+    return execFileSync('git', ['rev-parse', '--show-toplevel'], {
+      cwd,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
   } catch {
     return '';
   }
