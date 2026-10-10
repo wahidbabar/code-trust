@@ -14,7 +14,7 @@
 | T10 | API on Lambda: handler, Neon, `ApiStack`, CORS | 2 | in review | T06, T08 | [#14](https://github.com/wahidbabar/code-trust/pull/14) |
 | T11 | Git for the Lambda runtime: layer from AL2023 packages | 2 | in review | T01 | [#11](https://github.com/wahidbabar/code-trust/pull/11) |
 | T12 | Dispatcher: events queue to the FIFO jobs queue | 2 | in review | T04, T07 | [#13](https://github.com/wahidbabar/code-trust/pull/13) |
-| T13 | `WorkerStack`: FIFO jobs queue, dispatcher and worker on Lambda | 2 | in review | T09, T10, T11, T12 | [#16](https://github.com/wahidbabar/code-trust/pull/16) |
+| T13 | `WorkerStack`: FIFO jobs queue, dispatcher and worker on Lambda | 2 | done | T09, T10, T11, T12 | [#16](https://github.com/wahidbabar/code-trust/pull/16) |
 | T14 | Repo removal events: private, deleted, uninstalled | 2 | planned | T04, T07 | |
 | T15 | Dashboard on GitHub Pages | 2 | planned | T06 | |
 | T16 | Attribution eval gate: labeled commits, scorer, holdout format | 2 | planned | T05 | |
@@ -26,7 +26,8 @@
 | --- | --- | --- | --- |
 | CDKToolkit | ap-south-1 | 2026-10-02 | CDK bootstrap, created once by the human |
 | CodeTrustFoundation | ap-south-1 | 2026-10-02 | Budget alarm and data bucket from T01 |
-| CodeTrustIngest | ap-south-1 | 2026-10-03 | Webhook Lambda and events queue from T04 |
+| CodeTrustIngest | ap-south-1 | 2026-10-03 | Webhook Lambda and events queue from T04. Updated 2026-10-10 by the `CodeTrustWorker` deploy, which added the events queue ARN output |
+| CodeTrustWorker | ap-south-1 | 2026-10-10 | FIFO jobs queue, dispatcher and worker with the git layer from T13 |
 
 ## Waves
 
