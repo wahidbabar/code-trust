@@ -136,3 +136,17 @@ curl -s -o /dev/null -w '%{http_code}\n' -X POST -H 'content-type: application/j
 - `403`: AWS refused the call before the function ran. The Function URL's resource policy needs both `lambda:InvokeFunctionUrl` and `lambda:InvokeFunction`; check the stack's two `AWS::Lambda::Permission` resources.
 - `429`: reserved concurrency is 0. See Off switch.
 - `502`: the function failed to start. Check its log group.
+
+## Dispatcher
+
+A second Lambda function, `src/dispatcher-lambda.ts`, drains the events queue and sends one job per event to the SQS FIFO jobs queue that `WorkerStack` deploys. Each job's `MessageGroupId` is the repo id, so one repo never has two jobs at once, and its `MessageDeduplicationId` is `<deliveryId>:<repo id>`.
+
+| Event | Job |
+| --- | --- |
+| `push` | `analyze`, `reason: 'push'`, with the event's `headSha` |
+| `repository_added` | `analyze`, `reason: 'backfill'`, `headSha: null` |
+| `repository_removed` | `delete_repo`, with the event's `reason` |
+
+- **Environment.** `JOBS_QUEUE_URL` is the jobs queue's URL (`DISPATCHER_ENV` in `@code-trust/ingest/env`). If it is unset the function still starts, and every record fails until it is set.
+- **Failures.** The function reports failed records through `ReportBatchItemFailures`, so SQS retries only those. A record fails if its body is not a valid `RepoEventMessage`, if SQS does not list its entry as sent, or if its batch's send throws. Batches of up to 10 go out one at a time, in record order, with the webhook's SDK timeouts. A retry within 5 minutes is deduplicated by the jobs queue.
+- **Logs.** One JSON line per record: `messageId`, `outcome` (`dispatched`, `failed` or `invalid`), and `reason` when it did not dispatch. A record that parsed also carries `deliveryId`, `repoId` and `event`, and once its job is built, `job` and `jobId`. `error` holds SQS's error code or the thrown error's name. A record that did not parse carries `fields`, the schema paths it broke. No line ever holds a message body or an error message.
