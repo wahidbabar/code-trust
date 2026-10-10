@@ -75,7 +75,8 @@ export interface TestDatabase {
 // lock shared, and drops hold it alone.
 const SCRATCH_SCHEMA_LOCK = sql`hashtext('code-trust scratch schemas')`;
 
-async function withScratchSchemaLock<T>(
+/** Runs `work` holding the scratch-schema lock. Any test that runs the Migrator itself must hold it shared. */
+export async function withScratchSchemaLock<T>(
   db: Kysely<Database>,
   mode: 'shared' | 'exclusive',
   work: (connection: Kysely<Database>) => Promise<T>,
