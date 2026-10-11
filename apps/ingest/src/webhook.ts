@@ -1,6 +1,7 @@
 // The webhook Lambda handler: verify GitHub's signature, map the delivery to queue messages,
 // enqueue them, and answer well inside GitHub's 10 second limit. The secret loader, the queue
 // sender and the clock are injected, so tests need no AWS.
+import type { RepoEventMessage } from '@code-trust/shared';
 import { z } from 'zod';
 import { toRepoEvents } from './events.ts';
 import { parseSignatureHeader, verifySignature } from './signature.ts';
@@ -49,7 +50,7 @@ const DeliveryIdSchema = z.guid();
 
 // Only these values are logged as they are. Anything else is logged as 'other', so a log line
 // never carries an arbitrary string from the request.
-const KNOWN_EVENTS = new Set(['ping', 'push', 'installation', 'installation_repositories']);
+const KNOWN_EVENTS = new Set(['ping', 'push', 'installation', 'installation_repositories', 'repository']);
 const KNOWN_ACTIONS = new Set([
   'created',
   'deleted',
@@ -58,6 +59,13 @@ const KNOWN_ACTIONS = new Set([
   'new_permissions_accepted',
   'added',
   'removed',
+  'privatized',
+  'publicized',
+  'renamed',
+  'transferred',
+  'edited',
+  'archived',
+  'unarchived',
 ]);
 
 const RESPONSE_BODY: Readonly<Record<number, string>> = {
@@ -161,12 +169,18 @@ export function createWebhookHandler(deps: WebhookDeps): WebhookHandler {
         outcome: 'failed',
         reason: 'queue-send',
         messages: result.messages.length,
+        ...summaryOf(result.messages),
         failedBatches: rejected.length,
         failedEntries,
         error: rejected[0] === undefined ? 'PartialBatchFailure' : errorName(rejected[0].reason),
       });
     }
-    return respond(200, { ...context, outcome: 'enqueued', messages: result.messages.length });
+    return respond(200, {
+      ...context,
+      outcome: 'enqueued',
+      messages: result.messages.length,
+      ...summaryOf(result.messages),
+    });
   };
 
   return async (request) => {
@@ -176,6 +190,18 @@ export function createWebhookHandler(deps: WebhookDeps): WebhookHandler {
       // Answer GitHub with a 500 the handler chose, rather than an error from the Lambda runtime.
       return respond(500, { outcome: 'failed', reason: 'unexpected', error: errorName(error) });
     }
+  };
+}
+
+// Built from the parsed messages, never from the payload: the ids passed the contract and the
+// reasons are its enum values, so no text from the request reaches the line.
+function summaryOf(messages: readonly RepoEventMessage[]): LogEntry {
+  const reasons = new Set(
+    messages.flatMap((message) => (message.type === 'repository_removed' ? [message.reason] : [])),
+  );
+  return {
+    repoIds: messages.map((message) => message.repo.id).join(','),
+    ...(reasons.size > 0 ? { removalReason: [...reasons].join(',') } : {}),
   };
 }
 
