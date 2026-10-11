@@ -15,7 +15,7 @@
 | T11 | Git for the Lambda runtime: layer from AL2023 packages | 2 | done | T01 | [#11](https://github.com/wahidbabar/code-trust/pull/11) |
 | T12 | Dispatcher: events queue to the FIFO jobs queue | 2 | done | T04, T07 | [#13](https://github.com/wahidbabar/code-trust/pull/13) |
 | T13 | `WorkerStack`: FIFO jobs queue, dispatcher and worker on Lambda | 2 | done | T09, T10, T11, T12 | [#16](https://github.com/wahidbabar/code-trust/pull/16) |
-| T14 | Repo removal events: private, deleted, uninstalled | 2 | in review | T04, T07 | |
+| T14 | Repo removal events: private, deleted, uninstalled | 2 | in review | T04, T07 | [#22](https://github.com/wahidbabar/code-trust/pull/22) |
 | T15 | Dashboard on GitHub Pages | 2 | in review | T06 | [#21](https://github.com/wahidbabar/code-trust/pull/21) |
 | T16 | Attribution eval gate: labeled commits, scorer, holdout format | 2 | planned | T05 | |
 | T17 | Attribution: unverified candidates, bots by email | 2 | planned | T16 | |
