@@ -2,15 +2,22 @@
   "name": "@code-trust/dashboard",
   "version": "0.0.0",
   "private": true,
-  "description": "Polling dashboard, a static site.",
+  "description": "Polling dashboard, a static site on GitHub Pages.",
   "type": "module",
-  "exports": {
-    ".": "./src/index.ts"
-  },
   "scripts": {
+    "dev": "vite",
+    "build": "vite build",
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",
     "format": "biome format --write .",
     "test": "vitest run"
+  },
+  "dependencies": {
+    "@code-trust/shared": "workspace:*",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "happy-dom": "^20.14.6",
+    "vite": "8.3.1"
   }
 }
