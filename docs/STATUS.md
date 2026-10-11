@@ -19,6 +19,7 @@
 | T15 | Dashboard on GitHub Pages | 2 | in review | T06 | [#21](https://github.com/wahidbabar/code-trust/pull/21) |
 | T16 | Attribution eval gate: labeled commits, scorer, holdout format | 2 | planned | T05 | |
 | T17 | Attribution: unverified candidates, bots by email | 2 | planned | T16 | |
+| T18 | Deleted repos: a daily sweep that verifies stored repos | 2 | planned | T09, T13, T14 | |
 
 ## Deployed
 
