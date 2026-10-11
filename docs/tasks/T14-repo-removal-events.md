@@ -1,6 +1,6 @@
 # T14: Repo removal events (private, deleted, uninstalled)
 
-Status: planned
+Status: in review
 Wave: 2
 Depends on: T04, T07 (merged to main before this starts)
 Owner paths (edit only these):
