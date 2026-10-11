@@ -116,7 +116,8 @@ Once, after the repo removal events PR (T14) has merged. Run these on the Mac, f
    ```
 
    - `-e` bundles only `CodeTrustIngest`, so the git layer zip is not needed. Without it the CLI bundles every stack, `CodeTrustWorker`'s git layer included.
-   - The events queue and the output `CodeTrustWorker` reads with `Fn::GetStackOutput` (`PublishOutputFnGetAttEventsQueue...Arn...`) are unchanged: T14 changes no infra, and `pnpm synth` gives the same `CodeTrustWorker` template as before.
+   - The events queue and the output `CodeTrustWorker` reads with `Fn::GetStackOutput` (`PublishOutputFnGetAttEventsQueue...Arn...`) are unchanged: T14 changes no infra.
+   - `cdk diff CodeTrustWorker` will still show the dispatcher's code as changed. The dispatcher imports `MAX_BATCH_SIZE` from `src/webhook.ts`, so its bundle carries the webhook's new schema constants without ever calling them. Nothing to do: its next deploy picks them up.
 
 2. Subscribe the App to the Repository event. On GitHub: Settings, Developer settings, GitHub Apps, the App's Edit button, then Permissions & events. If an organization owns the App, start from that organization's Settings instead. Under Subscribe to events, tick Repository and click Save changes.
    - The Repository event needs only the Metadata permission, which the App already has, so installations have nothing new to accept.
