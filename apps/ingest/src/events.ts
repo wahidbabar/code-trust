@@ -125,6 +125,7 @@ export function toRepoEvents(input: RepoEventsInput): RepoEventsResult {
     case 'repository':
       return routeOnAction(input, 'repository-fields', {
         privatized: () => fromRepositoryRemoved(input, 'privatized'),
+        // GitHub documents that Apps never receive this action. It is mapped in case one ever arrives.
         deleted: () => fromRepositoryRemoved(input, 'deleted'),
         publicized: () => fromRepositoryPublicized(input),
       });
