@@ -1,0 +1,77 @@
+name: Pages
+
+# Builds the dashboard and deploys it to GitHub Pages. A pull request only builds it, against a
+# placeholder API URL, so a broken build shows up before it reaches main. ci.yml never runs `vite build`.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/dashboard/**'
+      # The dashboard parses every response with these schemas, so a contract change must redeploy it.
+      - 'packages/shared/**'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/pages.yml'
+  pull_request:
+    paths:
+      - 'apps/dashboard/**'
+      - 'packages/shared/**'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One deploy at a time, and a running deploy always finishes. Pull requests get their own group per
+# branch, so a PR build never waits behind a deploy or cancels one.
+concurrency:
+  group: ${{ github.event_name == 'pull_request' && format('pages-{0}', github.ref) || 'pages' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build:
+    # Until the human sets the API_URL repository variable there is nothing to deploy against; the
+    # skipped job, and the deploy that needs it, keep main green.
+    if: github.event_name == 'pull_request' || vars.API_URL != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      # Corepack reads the pnpm version from packageManager in package.json, as in ci.yml.
+      - run: corepack enable
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # CI runs these as well, but in parallel with this workflow: a red dashboard must not deploy.
+      - run: pnpm --filter @code-trust/dashboard typecheck
+      - run: pnpm --filter @code-trust/dashboard test
+
+      - run: pnpm --filter @code-trust/dashboard build
+        env:
+          VITE_API_URL: ${{ github.event_name == 'pull_request' && 'https://example.invalid' || vars.API_URL }}
+
+      - if: github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: apps/dashboard/dist
+
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5
