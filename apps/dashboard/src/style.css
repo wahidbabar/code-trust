@@ -1,0 +1,498 @@
+/* Colours are the dataviz reference palette. AI is categorical slot 1 (blue) and human slot 2
+   (orange), checked with the palette validator in both modes (worst adjacent CVD delta E 24.7
+   light, 26.8 dark). Each cohort keeps its colour everywhere, and text never wears it. */
+:root {
+  color-scheme: light;
+  --page: #f9f9f7;
+  --surface: #fcfcfb;
+  --ink: #0b0b0b;
+  --ink-2: #52514e;
+  --muted: #898781;
+  --grid: #e1e0d9;
+  --axis: #c3c2b7;
+  --border: rgba(11, 11, 11, 0.1);
+  --link: #1c5cab;
+  --ai: #2a78d6;
+  --human: #eb6834;
+  --serious: #ec835a;
+  --shadow: 0 6px 24px rgba(11, 11, 11, 0.08);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --page: #0d0d0d;
+    --surface: #1a1a19;
+    --ink: #ffffff;
+    --ink-2: #c3c2b7;
+    --muted: #898781;
+    --grid: #2c2c2a;
+    --axis: #383835;
+    --border: rgba(255, 255, 255, 0.1);
+    --link: #86b6ef;
+    --ai: #3987e5;
+    --human: #d95926;
+    --shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--page);
+  color: var(--ink);
+}
+
+a {
+  color: var(--link);
+}
+
+.site-header,
+main {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 0 16px;
+}
+
+.site-header {
+  padding-top: 24px;
+  padding-bottom: 8px;
+}
+
+.brand {
+  color: var(--ink);
+  font-weight: 650;
+  font-size: 1.05rem;
+  text-decoration: none;
+}
+
+.tagline {
+  margin: 2px 0 0;
+  color: var(--ink-2);
+}
+
+main {
+  padding-bottom: 48px;
+}
+
+h1 {
+  font-size: 1.6rem;
+  line-height: 1.25;
+  margin: 16px 0 4px;
+  overflow-wrap: anywhere;
+}
+
+h1 a {
+  color: var(--ink);
+  text-decoration: none;
+}
+
+h1 a:hover {
+  text-decoration: underline;
+}
+
+h2 {
+  font-size: 1rem;
+  margin: 0 0 12px;
+}
+
+nav {
+  margin-top: 16px;
+}
+
+.lede {
+  color: var(--ink-2);
+  margin: 0 0 12px;
+  max-width: 62ch;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  margin: 16px 0;
+}
+
+.status {
+  color: var(--ink-2);
+  font-size: 0.9rem;
+  margin: 4px 0 12px;
+}
+
+.status-stale {
+  color: var(--ink);
+  border-left: 3px solid var(--serious);
+  padding-left: 10px;
+}
+
+.status-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  margin-right: 8px;
+  border-radius: 50%;
+  background: var(--serious);
+  color: #0b0b0b;
+  font-weight: 700;
+  font-size: 0.75rem;
+}
+
+.error {
+  border-left: 3px solid var(--serious);
+}
+
+.error-title {
+  font-weight: 650;
+  margin-top: 0;
+}
+
+button {
+  font: inherit;
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--page);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.unknown {
+  color: var(--ink-2);
+  font-style: italic;
+}
+
+.is-refreshing .card {
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+
+/* Tables */
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--grid);
+  vertical-align: top;
+}
+
+thead th {
+  color: var(--ink-2);
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+thead th.group {
+  border-bottom-color: var(--axis);
+}
+
+tbody tr:last-child > * {
+  border-bottom: 0;
+}
+
+.value {
+  font-variant-numeric: tabular-nums;
+}
+
+.table-card {
+  padding: 4px 8px;
+}
+
+.repo-table th[scope="row"] {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.headline-table th[scope="row"] {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.headline-table .value {
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.headline-table .value.unknown {
+  font-size: 0.9rem;
+  font-weight: 400;
+}
+
+.counted {
+  color: var(--ink-2);
+  font-size: 0.9rem;
+}
+
+/* On a phone each repository becomes a card, with every cell labelled. */
+@media (max-width: 720px) {
+  .repo-table thead {
+    display: none;
+  }
+
+  .repo-table tr,
+  .repo-table th,
+  .repo-table td {
+    display: block;
+    border: 0;
+    padding: 2px 8px;
+  }
+
+  .repo-table tr {
+    padding: 12px 4px;
+    border-bottom: 1px solid var(--grid);
+  }
+
+  .repo-table td[data-label]::before {
+    content: attr(data-label) ": ";
+    color: var(--ink-2);
+    font-style: normal;
+  }
+
+  .headline-table .counted {
+    display: none;
+  }
+}
+
+/* Chart */
+
+.chart-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 0 0 12px;
+  color: var(--ink-2);
+  font-size: 0.9rem;
+}
+
+.chart-meta [data-meta="last-activity"] {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+figure {
+  margin: 16px 0;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 20px;
+  list-style: none;
+  padding: 0;
+  margin: 0 0 8px;
+  font-size: 0.85rem;
+  color: var(--ink-2);
+}
+
+.line-key {
+  display: inline-block;
+  width: 16px;
+  height: 2px;
+  border-radius: 1px;
+  margin-right: 8px;
+  vertical-align: middle;
+  background: var(--ink-2);
+}
+
+.line-key-ai {
+  background: var(--ai);
+}
+
+.line-key-human {
+  background: var(--human);
+}
+
+.line-key-thin {
+  height: 1px;
+  opacity: 0.6;
+}
+
+.chart-frame {
+  position: relative;
+}
+
+.chart-plot {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.chart-plot:focus-visible {
+  outline: 2px solid var(--link);
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+
+.grid,
+.axis,
+.crosshair {
+  stroke-width: 1;
+  shape-rendering: crispEdges;
+}
+
+.grid {
+  stroke: var(--grid);
+}
+
+.axis {
+  stroke: var(--axis);
+}
+
+.crosshair {
+  stroke: var(--muted);
+  pointer-events: none;
+}
+
+.tick-label,
+.axis-title {
+  fill: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.end-label {
+  fill: var(--ink-2);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.run {
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Few lines at risk: the estimate is noisy there, so the line thins instead of disappearing. */
+.run-thin {
+  stroke-width: 1;
+  stroke-opacity: 0.6;
+}
+
+.curve-ai .run {
+  stroke: var(--ai);
+}
+
+.curve-human .run {
+  stroke: var(--human);
+}
+
+.end-dot {
+  stroke: var(--surface);
+  stroke-width: 2;
+}
+
+.curve-ai .end-dot {
+  fill: var(--ai);
+}
+
+.curve-human .end-dot {
+  fill: var(--human);
+}
+
+.hit-area {
+  fill: transparent;
+}
+
+.chart-tooltip {
+  position: absolute;
+  top: 8px;
+  transform: translateX(12px);
+  min-width: 180px;
+  padding: 8px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  font-size: 0.85rem;
+  pointer-events: none;
+}
+
+.chart-tooltip[hidden] {
+  display: none;
+}
+
+.chart-tooltip.is-flipped {
+  transform: translateX(calc(-100% - 12px));
+}
+
+.chart-tooltip ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.chart-tooltip li {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.chart-tooltip li span:last-child {
+  color: var(--ink-2);
+}
+
+.tooltip-day {
+  margin: 0 0 4px;
+  color: var(--ink-2);
+}
+
+.chart-notes {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  color: var(--ink-2);
+  font-size: 0.9rem;
+}
+
+.chart-notes [data-note="all-removed"] {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.chart-table {
+  margin-top: 12px;
+  font-size: 0.9rem;
+}
+
+.chart-table summary {
+  cursor: pointer;
+  color: var(--link);
+}
+
+.chart-table table {
+  margin-top: 8px;
+  max-width: 420px;
+}
+
+.chart-table caption {
+  text-align: left;
+  font-weight: 600;
+  padding: 8px 0 4px;
+}
+
+.chart-missing,
+.chart-empty {
+  color: var(--ink-2);
+  font-style: italic;
+}
+
+.footnote {
+  color: var(--ink-2);
+  font-size: 0.85rem;
+  max-width: 72ch;
+}
