@@ -20,6 +20,7 @@
 | T16 | Attribution eval gate: labeled commits, scorer, holdout format | 2 | planned | T05 | |
 | T17 | Attribution: unverified candidates, bots by email | 2 | planned | T16 | |
 | T18 | Deleted repos: a daily sweep that verifies stored repos | 2 | planned | T09, T13, T14 | |
+| T19 | Delete by installation: uninstalls and narrowed selections that name no repos | 2 | planned | T12, T14 | |
 
 ## Deployed
 
