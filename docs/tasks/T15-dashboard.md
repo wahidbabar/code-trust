@@ -1,6 +1,6 @@
 # T15: Dashboard (static site on GitHub Pages)
 
-Status: in progress
+Status: in review
 Wave: 2
 Depends on: T06 (merged). It reads the deployed API only after T10 is deployed, but no code of T10's.
 Owner paths (edit only these):
