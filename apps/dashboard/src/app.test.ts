@@ -14,10 +14,12 @@ import {
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { createApiClient } from './api.ts';
 import { mountApp, parseRoute } from './app.ts';
-import { FRESH_FOR_MS, POLL_INTERVAL_MS } from './poller.ts';
 import { fakeResponse, restoreVisibility, settle, stubFetch, stubVisibility } from './testing.ts';
 
 const BASE = 'https://example.invalid';
+// Literals, not imported from poller.ts, so the app is held to the polling rules themselves.
+const TEN_MINUTES_MS = 10 * 60_000;
+const ONE_MINUTE_MS = 60_000;
 const freshRepo: ApiRepo = { ...newApiRepoFixture, id: 2, name: 'fresh-repo' };
 const listBody = { repos: [apiRepoFixture, freshRepo] };
 const curvesBody = { ...survivalCurveResponseFixture, curves: [survivalCurveFixture, youngSurvivalCurveFixture] };
@@ -67,7 +69,7 @@ describe('requests', () => {
     await settle();
     navigate(`#/repos/${REPO_ID}`);
     await settle();
-    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS);
+    await vi.advanceTimersByTimeAsync(TEN_MINUTES_MS);
     await settle();
     expect(calls).toEqual([
       `${base}/repos`,
@@ -147,7 +149,7 @@ describe('errors and staleness', () => {
     expect(root.querySelector('[data-stale]')).toBeNull();
 
     summary = () => fakeResponse({ message: 'Service Unavailable' }, 503);
-    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS);
+    await vi.advanceTimersByTimeAsync(TEN_MINUTES_MS);
     await settle();
     expect(root.querySelector('[data-stale]')?.textContent).toContain('The API answered 503');
     expect(headline('ai', 30)).toBe('80%');
@@ -157,13 +159,13 @@ describe('errors and staleness', () => {
     // A body that breaks the contract on a later poll is stale data too, never a partial render.
     summary = () =>
       fakeResponse({ ...repoSummaryResponseFixture, metrics: [{ ...survivalMetricFixture, linesTotal: 11 }] });
-    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS);
+    await vi.advanceTimersByTimeAsync(TEN_MINUTES_MS);
     await settle();
     expect(root.querySelector('[data-stale]')?.textContent).toContain('broke the contract');
     expect(root.querySelector('tr[data-cohort="ai"] .counted')?.textContent).toBe('10 lines, 3 removed');
 
     summary = () => fakeResponse(repoSummaryResponseFixture);
-    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS);
+    await vi.advanceTimersByTimeAsync(TEN_MINUTES_MS);
     await settle();
     expect(root.querySelector('[data-stale]')).toBeNull();
   });
@@ -178,7 +180,7 @@ describe('errors and staleness', () => {
     mount(BASE, `#/repos/${REPO_ID}`);
     await settle();
     gone = true;
-    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS);
+    await vi.advanceTimersByTimeAsync(TEN_MINUTES_MS);
     await settle();
     expect(root.querySelector('h1')?.textContent).toBe('Repository not found');
     expect(root.textContent).not.toContain('80%');
@@ -247,7 +249,7 @@ describe('navigation', () => {
     await settle();
     expect(calls).toHaveLength(4);
 
-    await vi.advanceTimersByTimeAsync(FRESH_FOR_MS + 1);
+    await vi.advanceTimersByTimeAsync(ONE_MINUTE_MS + 1);
     navigate(`#/repos/${REPO_ID}`);
     await settle();
     expect(calls).toHaveLength(6);
