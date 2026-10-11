@@ -84,13 +84,56 @@ export function publicRepositories(count: number) {
   return Array.from({ length: count }, (_, i) => repositoryEntry(1001 + i, `octo-org/repo-${i + 1}`));
 }
 
-export function installationPayload(action: string, repositories: readonly unknown[] | undefined) {
+/**
+ * A `repository` delivery shaped like octokit's captured `repository/privatized` example, plus the
+ * `installation` an App delivery carries (as in `repository/created.with-installation`).
+ */
+export function repositoryPayload(
+  action: string,
+  repository: Record<string, unknown> = {},
+  overrides: Record<string, unknown> = {},
+) {
+  return {
+    action,
+    repository: {
+      id: REPO_ID,
+      node_id: 'R_kgDOABPHzQ',
+      name: 'hello.world',
+      full_name: 'octo-org/hello.world',
+      private: false,
+      owner: { login: 'octo-org', id: 9_919, type: 'Organization' },
+      html_url: 'https://github.com/octo-org/hello.world',
+      description: 'My first repository on GitHub.',
+      fork: false,
+      // Repository events carry ISO strings here, unlike push payloads.
+      created_at: '2019-05-15T15:19:25Z',
+      updated_at: '2026-10-01T09:31:00Z',
+      pushed_at: '2026-10-01T09:30:00Z',
+      default_branch: 'main',
+      archived: false,
+      disabled: false,
+      is_template: false,
+      topics: [],
+      visibility: 'public',
+      ...repository,
+    },
+    sender: { login: 'octocat', id: 1, type: 'User' },
+    installation: { id: INSTALLATION_ID, node_id: 'MDIzOkludGVncmF0aW9uSW5zdGFsbGF0aW9uNTIzNDA5MTc=' },
+    ...overrides,
+  };
+}
+
+export function installationPayload(
+  action: string,
+  repositories: readonly unknown[] | undefined,
+  selection: 'all' | 'selected' = 'selected',
+) {
   return {
     action,
     installation: {
       id: INSTALLATION_ID,
       account: { login: 'octo-org', type: 'Organization' },
-      repository_selection: 'selected',
+      repository_selection: selection,
       permissions: { contents: 'read', metadata: 'read' },
       events: ['push'],
     },

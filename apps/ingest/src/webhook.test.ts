@@ -1,5 +1,11 @@
 import { type RepoEventMessage, RepoEventMessageSchema } from '@code-trust/shared';
-import { INSTALLATION_ID, pushEventFixture, REPO_ID, repositoryAddedEventFixture } from '@code-trust/shared/fixtures';
+import {
+  INSTALLATION_ID,
+  pushEventFixture,
+  REPO_ID,
+  repositoryAddedEventFixture,
+  repositoryRemovedEventFixture,
+} from '@code-trust/shared/fixtures';
 import { describe, expect, test } from 'vitest';
 import {
   captureLogs,
@@ -11,6 +17,7 @@ import {
   publicRepositories,
   pushPayload,
   repositoryEntry,
+  repositoryPayload,
   signatureOf,
   signedRequest,
   TEST_SECRET,
@@ -112,14 +119,8 @@ describe('row: a valid ping, or an event or action not listed, returns 200 and e
     ['ping', 'ping', { zen: 'Design for failure.', hook_id: 1, hook: { type: 'App', app_id: 42 } }],
     ['an unlisted event', 'issues', { action: 'opened', issue: { number: 1 }, repository: { id: REPO_ID } }],
     ['no X-GitHub-Event header', null, { zen: 'Keep it logically awesome.' }],
-    ['installation deleted, carrying only its action', 'installation', { action: 'deleted' }],
     ['installation suspend', 'installation', { action: 'suspend' }],
     ['installation new_permissions_accepted', 'installation', installationPayload('new_permissions_accepted', [])],
-    [
-      'installation_repositories removed, with no repositories_added',
-      'installation_repositories',
-      { action: 'removed' },
-    ],
   ])('%s', async (_, event, payload) => {
     const { handler, queue } = setup();
     const response = await handler(signedRequest(event, payload));
@@ -409,5 +410,351 @@ describe('extra cases', () => {
     }
     // The lines are still useful: each says what happened and why.
     for (const line of logs.lines) expect(JSON.parse(line)).toMatchObject({ outcome: expect.any(String) });
+  });
+});
+
+// Repo removal events. Payloads follow octokit/webhooks' captured examples
+// (payload-examples/api.github.com/<event>/<action>.payload.json) unless a test says otherwise.
+
+const reasonOf = (message: RepoEventMessage | undefined) =>
+  message?.type === 'repository_removed' ? message.reason : undefined;
+
+const logLine = (lines: readonly string[], index = 0): Record<string, unknown> => JSON.parse(lines[index] ?? '{}');
+
+const removal = (id: number, fullName: string, reason: string) => {
+  const [owner, name] = fullName.split('/');
+  return {
+    version: 1,
+    type: 'repository_removed',
+    deliveryId: DELIVERY_ID,
+    receivedAt: NOW.toISOString(),
+    installationId: INSTALLATION_ID,
+    repo: { id, owner, name },
+    reason,
+  };
+};
+
+describe('row: repository privatized returns 200 and enqueues one repository_removed, reason privatized', () => {
+  test('the message equals repositoryRemovedEventFixture apart from the delivery id and the clock', async () => {
+    const { handler, queue } = setup();
+    // As in octokit's example: private is true while visibility still says public. A removal reads neither.
+    const payload = repositoryPayload('privatized', { private: true, visibility: 'public' });
+    const response = await handler(signedRequest('repository', payload));
+    expect(response.statusCode).toBe(200);
+    const [message, ...rest] = messagesOf(queue.bodies);
+    expect(rest).toEqual([]);
+    expect(message?.deliveryId).toBe(DELIVERY_ID);
+    expect(message?.receivedAt).toBe(NOW.toISOString());
+    const { deliveryId, receivedAt } = repositoryRemovedEventFixture;
+    expect({ ...message, deliveryId, receivedAt }).toEqual(repositoryRemovedEventFixture);
+  });
+});
+
+describe('row: repository deleted returns 200 and enqueues one repository_removed, reason deleted', () => {
+  // octokit has no repository/deleted example. GitHub's webhook-repository-deleted schema uses the
+  // same repository object as privatized, so the payload has the same shape.
+  test.each([
+    ['a public repo', { private: false, visibility: 'public' }],
+    ['a private repo', { private: true, visibility: 'private' }],
+  ])('%s', async (_, repository) => {
+    const { handler, queue } = setup();
+    const response = await handler(signedRequest('repository', repositoryPayload('deleted', repository)));
+    expect(response.statusCode).toBe(200);
+    expect(messagesOf(queue.bodies)).toEqual([removal(REPO_ID, 'octo-org/hello.world', 'deleted')]);
+  });
+});
+
+describe('row: repository publicized returns 200 and enqueues one repository_added', () => {
+  test('the message equals repositoryAddedEventFixture apart from the delivery id and the clock', async () => {
+    const { handler, queue } = setup();
+    const payload = repositoryPayload('publicized', { private: false, visibility: 'public' });
+    const response = await handler(signedRequest('repository', payload));
+    expect(response.statusCode).toBe(200);
+    const [message, ...rest] = messagesOf(queue.bodies);
+    expect(rest).toEqual([]);
+    expect(message?.receivedAt).toBe(NOW.toISOString());
+    const { deliveryId, receivedAt } = repositoryAddedEventFixture;
+    expect({ ...message, deliveryId, receivedAt }).toEqual(repositoryAddedEventFixture);
+  });
+
+  test.each([
+    ['visibility internal', { private: false, visibility: 'internal' }],
+    ['private still true', { private: true, visibility: 'private' }],
+  ])('a publicized repo that is not public enqueues nothing: %s', async (_, repository) => {
+    const { handler, queue, logs } = setup();
+    const response = await handler(signedRequest('repository', repositoryPayload('publicized', repository)));
+    expect(response.statusCode).toBe(200);
+    expect(queue.batches).toEqual([]);
+    expect(logLine(logs.lines)).toMatchObject({ outcome: 'ignored', reason: 'not-public' });
+  });
+});
+
+describe('row: repository with any other action returns 200 and enqueues nothing', () => {
+  test.each([
+    [
+      'renamed',
+      repositoryPayload(
+        'renamed',
+        { name: 'hello.world2', full_name: 'octo-org/hello.world2' },
+        { changes: { repository: { name: { from: 'hello.world' } } } },
+      ),
+    ],
+    [
+      'transferred',
+      repositoryPayload(
+        'transferred',
+        { full_name: 'new-org/hello.world', owner: { login: 'new-org', id: 9_920, type: 'Organization' } },
+        { changes: { owner: { from: { organization: { login: 'octo-org', id: 9_919 } } } } },
+      ),
+    ],
+    ['edited', repositoryPayload('edited', {}, { changes: { description: { from: 'An older description.' } } })],
+    ['archived', repositoryPayload('archived', { archived: true })],
+    ['unarchived', repositoryPayload('unarchived')],
+    ['created', repositoryPayload('created')],
+  ])('%s', async (_, payload) => {
+    const { handler, queue, logs } = setup();
+    const response = await handler(signedRequest('repository', payload));
+    expect(response.statusCode).toBe(200);
+    expect(queue.batches).toEqual([]);
+    expect(logLine(logs.lines)).toMatchObject({ outcome: 'ignored', reason: 'unhandled-action' });
+  });
+});
+
+describe('row: installation deleted returns 200 and enqueues one repository_removed per repo, reason uninstalled', () => {
+  test('public and private repos alike, every message sharing the delivery and the installation', async () => {
+    const { handler, queue } = setup();
+    const repositories = [
+      repositoryEntry(REPO_ID, 'octo-org/hello.world'),
+      repositoryEntry(2001, 'octo-org/secret-sauce', true),
+      repositoryEntry(2002, 'octo-org/docs'),
+      repositoryEntry(2003, 'octo-org/payroll', true),
+    ];
+    const response = await handler(signedRequest('installation', installationPayload('deleted', repositories)));
+    expect(response.statusCode).toBe(200);
+    const messages = messagesOf(queue.bodies);
+    expect(messages.map((m) => [m.type, m.repo.id, reasonOf(m), m.deliveryId, m.installationId])).toEqual([
+      ['repository_removed', REPO_ID, 'uninstalled', DELIVERY_ID, INSTALLATION_ID],
+      ['repository_removed', 2001, 'uninstalled', DELIVERY_ID, INSTALLATION_ID],
+      ['repository_removed', 2002, 'uninstalled', DELIVERY_ID, INSTALLATION_ID],
+      ['repository_removed', 2003, 'uninstalled', DELIVERY_ID, INSTALLATION_ID],
+    ]);
+    expect(messages[1]).toEqual(removal(2001, 'octo-org/secret-sauce', 'uninstalled'));
+  });
+});
+
+describe('row: installation deleted that names no repos returns 200 and enqueues nothing', () => {
+  // The data of such repos stays until a delete by installation exists: see Decisions.
+  test.each([
+    [
+      'no repositories key, as an all-repositories installation may send',
+      installationPayload('deleted', undefined, 'all'),
+    ],
+    ['an empty repositories list', installationPayload('deleted', [], 'all')],
+  ])('%s', async (_, payload) => {
+    const { handler, queue, logs } = setup();
+    const response = await handler(signedRequest('installation', payload));
+    expect(response.statusCode).toBe(200);
+    expect(queue.batches).toEqual([]);
+    expect(logLine(logs.lines)).toMatchObject({ outcome: 'ignored', reason: 'no-repository-list' });
+  });
+});
+
+describe('row: installation_repositories removed returns 200 and enqueues one repository_removed per repo in repositories_removed', () => {
+  test('private repos included, and repositories_added is not read', async () => {
+    const { handler, queue } = setup();
+    const added = [repositoryEntry(3001, 'octo-org/new-lib')];
+    const removed = [repositoryEntry(3003, 'octo-org/old-lib'), repositoryEntry(3004, 'octo-org/hr-tools', true)];
+    const response = await handler(
+      signedRequest('installation_repositories', installationRepositoriesPayload('removed', added, removed)),
+    );
+    expect(response.statusCode).toBe(200);
+    expect(messagesOf(queue.bodies)).toEqual([
+      removal(3003, 'octo-org/old-lib', 'removed_from_installation'),
+      removal(3004, 'octo-org/hr-tools', 'removed_from_installation'),
+    ]);
+  });
+
+  // The dispatcher dedupes jobs on <deliveryId>:<repo id>, so a second event for the same repo in
+  // one delivery would be dropped without a trace.
+  test('one delivery yields at most one event per repo, even for a repo listed as added and removed', async () => {
+    const { handler, queue } = setup();
+    const both = [repositoryEntry(3005, 'octo-org/flip-flop')];
+    await handler(signedRequest('installation_repositories', installationRepositoriesPayload('removed', both, both)));
+    await handler(signedRequest('installation_repositories', installationRepositoriesPayload('added', both, both)));
+    expect(messagesOf(queue.bodies).map((m) => [m.type, m.repo.id])).toEqual([
+      ['repository_removed', 3005],
+      ['repository_added', 3005],
+    ]);
+  });
+});
+
+describe('row: installation_repositories removed with an empty repositories_removed returns 200 and enqueues nothing', () => {
+  test('as GitHub sends when an installation narrows from all repositories to selected ones', async () => {
+    const { handler, queue, logs } = setup();
+    const payload = installationRepositoriesPayload('removed', [], []);
+    const response = await handler(signedRequest('installation_repositories', payload));
+    expect(response.statusCode).toBe(200);
+    expect(queue.batches).toEqual([]);
+    expect(logLine(logs.lines)).toMatchObject({ outcome: 'ignored', reason: 'selection-narrowed' });
+  });
+});
+
+describe('extra cases: repo removal events', () => {
+  test('installation_repositories removed with 25 repos enqueues 25 messages in batches of at most 10', async () => {
+    const { handler, queue } = setup();
+    const payload = installationRepositoriesPayload('removed', [], publicRepositories(25));
+    const response = await handler(signedRequest('installation_repositories', payload));
+    expect(response.statusCode).toBe(200);
+    expect(queue.batches.map((batch) => batch.length)).toEqual([10, 10, 5]);
+    expect(Math.max(...queue.batches.map((batch) => batch.length))).toBeLessThanOrEqual(MAX_BATCH_SIZE);
+    for (const batch of queue.batches) expect(new Set(batch.map((entry) => entry.id)).size).toBe(batch.length);
+    const messages = messagesOf(queue.bodies);
+    expect(new Set(messages.map((message) => message.repo.id)).size).toBe(25);
+    expect(new Set(messages.map(reasonOf))).toEqual(new Set(['removed_from_installation']));
+  });
+
+  describe('a handled action missing a field the enqueue path needs is a 400, read by the strict stage', () => {
+    const { installation: _installation, ...privatizedWithoutInstallation } = repositoryPayload('privatized');
+    const { id: _id, ...repositoryWithoutId } = repositoryPayload('deleted').repository;
+    const { private: _private, ...repositoryWithoutPrivate } = repositoryPayload('publicized').repository;
+    const { action: _action, ...repositoryWithoutAction } = repositoryPayload('privatized');
+
+    test.each([
+      [
+        'repository privatized without installation',
+        'repository',
+        privatizedWithoutInstallation,
+        'repository-fields',
+        'installation',
+      ],
+      [
+        'repository deleted without repository.id',
+        'repository',
+        { ...repositoryPayload('deleted'), repository: repositoryWithoutId },
+        'repository-fields',
+        'repository.id',
+      ],
+      [
+        'repository publicized without repository.private',
+        'repository',
+        { ...repositoryPayload('publicized'), repository: repositoryWithoutPrivate },
+        'repository-fields',
+        'repository.private',
+      ],
+      ['repository without an action', 'repository', repositoryWithoutAction, 'repository-fields', 'action'],
+      [
+        'installation deleted, carrying only its action',
+        'installation',
+        { action: 'deleted' },
+        'installation-fields',
+        'installation',
+      ],
+      [
+        'installation_repositories removed, carrying only its action',
+        'installation_repositories',
+        { action: 'removed' },
+        'installation-fields',
+        'repositories_removed',
+      ],
+    ])('%s', async (_, event, payload, reason, field) => {
+      const { handler, queue, logs } = setup();
+      const response = await handler(signedRequest(event, payload));
+      expect(response.statusCode).toBe(400);
+      expect(queue.batches).toEqual([]);
+      const line = logLine(logs.lines);
+      expect(line).toMatchObject({ outcome: 'invalid', reason });
+      expect(String(line.fields).split(',')).toContain(field);
+    });
+
+    test('repository privatized whose full_name has no slash', async () => {
+      const { handler, queue, logs } = setup();
+      const payload = repositoryPayload('privatized', { full_name: 'hello.world' });
+      expect((await handler(signedRequest('repository', payload))).statusCode).toBe(400);
+      expect(queue.batches).toEqual([]);
+      expect(logLine(logs.lines)).toMatchObject({ outcome: 'invalid', reason: 'full-name' });
+    });
+  });
+
+  test.each([
+    ['renamed', { action: 'renamed' }],
+    ['transferred', { action: 'transferred' }],
+    ['edited', { action: 'edited' }],
+    ['an action named like an Object.prototype key', { action: 'constructor' }],
+  ])('an unhandled repository action is a 200 even with every other field missing: %s', async (_, payload) => {
+    const { handler, queue, logs } = setup();
+    const response = await handler(signedRequest('repository', payload));
+    expect(response.statusCode).toBe(200);
+    expect(queue.batches).toEqual([]);
+    expect(logLine(logs.lines)).toMatchObject({ outcome: 'ignored', reason: 'unhandled-action' });
+  });
+
+  test('the log line for a removal carries the reason and the repo ids, and no payload text', async () => {
+    const canary = 'leak-canary-5d1f';
+    const user = { login: canary, id: 2, type: 'User' };
+    const { handler, queue, logs } = setup();
+    const privatized = repositoryPayload(
+      'privatized',
+      { full_name: `${canary}/hello.world`, owner: user, description: canary, private: true, visibility: 'private' },
+      { sender: user },
+    );
+    const uninstalled = installationPayload('deleted', [
+      repositoryEntry(1001, `${canary}/a`),
+      repositoryEntry(1002, `${canary}/b`, true),
+    ]);
+    await handler(signedRequest('repository', privatized));
+    await handler(signedRequest('installation', uninstalled));
+
+    // The canary reached the queue as the owner, so its absence from the log means something.
+    expect(queue.bodies.join('\n')).toContain(canary);
+    expect(logs.lines).toHaveLength(2);
+    for (const line of logs.lines) expect(line).not.toContain(canary);
+    expect(logs.lines.map((line) => JSON.parse(line))).toMatchObject([
+      {
+        status: 200,
+        event: 'repository',
+        action: 'privatized',
+        outcome: 'enqueued',
+        removalReason: 'privatized',
+        repoIds: String(REPO_ID),
+      },
+      {
+        status: 200,
+        event: 'installation',
+        action: 'deleted',
+        outcome: 'enqueued',
+        removalReason: 'uninstalled',
+        repoIds: '1001,1002',
+      },
+    ]);
+  });
+
+  test('a removal whose queue send fails logs the reason and the repo ids on its 500 line', async () => {
+    const canary = 'leak-canary-5d1f';
+    const { handler, logs } = setup({ failures: { 0: new Error(`${canary} in an SDK error message`) } });
+    const payload = repositoryPayload('deleted', { full_name: `${canary}/hello.world` });
+    expect((await handler(signedRequest('repository', payload))).statusCode).toBe(500);
+    expect(logs.lines[0]).not.toContain(canary);
+    expect(logLine(logs.lines)).toMatchObject({
+      status: 500,
+      reason: 'queue-send',
+      removalReason: 'deleted',
+      repoIds: String(REPO_ID),
+    });
+  });
+
+  test('every removal and publicized body parses with RepoEventMessageSchema and carries nothing else', async () => {
+    const { handler, queue } = setup();
+    await handler(signedRequest('repository', repositoryPayload('privatized')));
+    await handler(signedRequest('repository', repositoryPayload('deleted')));
+    await handler(signedRequest('repository', repositoryPayload('publicized')));
+    await handler(signedRequest('installation', installationPayload('deleted', publicRepositories(3))));
+    await handler(
+      signedRequest('installation_repositories', installationRepositoriesPayload('removed', [], publicRepositories(2))),
+    );
+    expect(queue.bodies).toHaveLength(8);
+    for (const body of queue.bodies) {
+      const raw: unknown = JSON.parse(body);
+      expect(RepoEventMessageSchema.parse(raw)).toEqual(raw);
+    }
   });
 });
