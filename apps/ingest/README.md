@@ -18,12 +18,15 @@ The GitHub App webhook. A Lambda function behind a Lambda Function URL verifies 
 | Body not JSON, a needed field missing, or no `X-GitHub-Delivery` | 400 | nothing |
 | Queue send failed, or the secret could not be loaded | 500 | nothing that GitHub can see; redeliver it |
 
-Private repositories are never analyzed: the read API has no auth. Removals go out for every repo a payload names, public or private. A removal carries only the repo id and only ever leads to a delete, and a repo that turned private while a delivery was missed must still lose its data.
+Private repositories are never analyzed: the read API has no auth. Removals go out for every repo a payload names, public or private. A removal names the repo, is never stored, and only ever leads to a delete, and a repo that turned private while a delivery was missed must still lose its data.
 
-Two deliveries name no repos, so they enqueue nothing. Those repos' data stays public until a delete-by-installation task lands:
+Three cases leave a repo's data public, because no delivery names the repo:
 
-- `installation` `deleted` without a `repositories` list, logged as `no-repository-list`. GitHub's schema makes the list optional and every documented example is an installation on selected repositories, so uninstalling an installation that covered all repositories may name none.
-- `installation_repositories` `removed` with an empty `repositories_removed`, logged as `selection-narrowed`. GitHub sends the list empty when an installation narrows from all repositories to selected ones.
+- `installation` `deleted` without a `repositories` list enqueues nothing, logged as `no-repository-list`. GitHub's schema makes the list optional and every documented example is an installation on selected repositories, so uninstalling an installation that covered all repositories may name none.
+- `installation_repositories` `removed` with an empty `repositories_removed` enqueues nothing, logged as `selection-narrowed`. GitHub sends the list empty when an installation narrows from all repositories to selected ones.
+- A deleted repo. GitHub documents that Apps never receive `repository` `deleted`, so that row only acts if GitHub ever sends it. Whether deleting a repo in a selected installation sends `installation_repositories` `removed` is not documented.
+
+The first two need a delete-by-installation task, and the third needs something that notices a repo is gone. Until then that data stays in the read API.
 
 Renames and transfers need nothing: the repo id is stable, and the next analysis updates the owner and name.
 
@@ -121,7 +124,7 @@ Once, after the repo removal events PR (T14) has merged. Run these on the Mac, f
 
 2. Subscribe the App to the Repository event. On GitHub: Settings, Developer settings, GitHub Apps, the App's Edit button, then Permissions & events. If an organization owns the App, start from that organization's Settings instead. Under Subscribe to events, tick Repository and click Save changes.
    - The Repository event needs only the Metadata permission, which the App already has, so installations have nothing new to accept.
-   - From now on `privatized`, `deleted` and `publicized` arrive. `installation` and `installation_repositories` always did.
+   - From now on `privatized` and `publicized` arrive. GitHub documents that Apps never receive `deleted`. `installation` and `installation_repositories` always arrived.
 
 Then check the App's Advanced tab, Recent Deliveries: the next `repository` delivery should show 200. Log out with `aws logout`.
 
